@@ -181,15 +181,14 @@ The UI language is Polish.
 
 These are unverified. If one fails, the affected section is revised before continuing.
 
-1. A non-extractable `CryptoKey` persists in IndexedDB across service worker restarts in Chrome.
-2. Writing with a stale `sha` makes the GitHub contents API reject the update, so a concurrent
-   write is detected.
-3. The exact set of URLs `chrome.tabs.create` refuses.
-4. Newest majors of TypeScript (7), Preact (11), Vitest (5) and jsdom work together. Peer ranges
+1. A non-extractable `CryptoKey` persists in IndexedDB across browser restarts in Chrome.
+2. Newest majors of TypeScript (7), Preact (11), Vitest (5) and jsdom work together. Peer ranges
    allow them, but they have not been run together here. If they fail, pin the newest working
    version and record why.
 
-## Unresolved questions
+Verified on a real private repository on 2026-11-08: a write with a stale `sha` returns `409`, a
+write without `sha` to an existing file returns `422`, and reads carry `max-age=60`, so every
+request must bypass the HTTP cache.
 
-- GitHub repository for this project: not created yet. Recommend a public or private repo named
-  `browser-tabs-sync`, chosen by the owner, because PRs and CI need a remote.
+The extension has no service worker: the popup runs `Send` and the preview page runs `Pull`. URLs
+the browser refuses are detected when opening them, not listed in advance.
