@@ -1,0 +1,43 @@
+{
+  "name": "browser-tabs-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Encrypted sync of tabs, tab groups and bookmarks between browsers",
+  "type": "module",
+  "scripts": {
+    "build:extension": "node ./scripts/build-extension.mjs",
+    "package:chromium": "node ./scripts/package-chromium.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "pnpm build:extension && playwright test",
+    "lint": "oxlint .",
+    "format": "oxfmt \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"e2e/**/*.ts\" package.json src/manifest.json",
+    "format:check": "oxfmt --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"e2e/**/*.ts\" package.json src/manifest.json",
+    "audit:deps": "audit-ci --config ./audit-ci.json",
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.4",
+    "preact": "^11.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/preact": "^3.2.6",
+    "@types/chrome": "^0.3.7",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.6",
+    "audit-ci": "^7.1.0",
+    "esbuild": "^0.28.2",
+    "fake-indexeddb": "^6.2.7",
+    "jsdom": "^31.0.0",
+    "lefthook": "^2.2.2",
+    "oxfmt": "^0.77.0",
+    "oxlint": "^1.92.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  },
+  "packageManager": "pnpm@12.18.0"
+}

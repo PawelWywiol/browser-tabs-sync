@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Browser Tabs Sync",
+  "version": "0.1.0",
+  "description": "Encrypted sync of tabs, tab groups and bookmarks between browsers.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1emXsxFtXYNsSmyrXw7tJcRfEY0tMYh3D6c/uaRtXWL1ZaW/Wqx5tjhQrnsflg4mvFi6XMN/3brID3Z5SY3uG/Oh2UnvEg/bfVjaVTcbzl2aj9SzD8g70Lgar7YX0sRJ8AxY2v0LGM42ZxJhxzDKTIeFdksKFDTv6oUiQOIdulkduxRljjVjVzZvz2QGq6oIKaWRJD+dP8tGejNG+9HSX0jWOmfUVAZo+zQbPgQjsOILq5ImqCbmjFZGRqVKvlnT1AWGYQ/YO1yQlODwP9CNsrQvXNS3JidNmCrqC5qj1dZEMk4mufHhJaxWHhEp7GJLxOy120bffmD0SXi3u/Ze7wIDAQAB",
+  "minimum_chrome_version": "134",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "permissions": ["tabs", "tabGroups", "bookmarks", "storage"],
+  "host_permissions": ["https://api.github.com/*"],
+  "action": {
+    "default_title": "Browser Tabs Sync",
+    "default_popup": "popup/index.html"
+  },
+  "options_page": "options/index.html"
+}
