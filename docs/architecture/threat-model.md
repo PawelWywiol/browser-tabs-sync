@@ -30,3 +30,4 @@ URLs, page titles, tab group names, sync profile names, the encryption key, the 
 - A leaked key exposes the whole repository history: replace the repository and generate a new key.
 - GitHub serving an older valid version is not detected.
 - File size and commit times reveal a rough tab count and activity pattern.
+- A Chrome profile signed in with account bookmarks can have several bookmark roots of one type. Only the first root of each type is synced; bookmarks in other roots are not sent or changed.

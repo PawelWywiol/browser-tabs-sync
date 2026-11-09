@@ -29,4 +29,4 @@ Output lands in `dist/extension`. Releases are built by pushing a `v*` tag.
 - `src/ui`: Preact screens
 - `src/popup`, `src/options`, `src/preview`: page entries
 - `tests`: unit tests, `e2e`: Playwright
-- `docs/architecture`: design, data model, threat model
+- `docs/architecture`: overview, data model, threat model

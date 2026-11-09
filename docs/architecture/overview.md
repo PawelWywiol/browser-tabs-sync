@@ -62,6 +62,8 @@ Matching:
 - Bookmarks match by folder path and URL. Top-level folders are identified by `folderType`
   (`bookmarks-bar`, `other`, `mobile`), not by their localized titles. They can't be renamed,
   moved or removed, only their children can. `managed` folders are never touched.
+- A Chrome profile signed in with account bookmarks can have several roots of one type. Only
+  the first root of each type is synced.
 
 ## Modules
 
