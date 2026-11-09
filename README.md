@@ -14,9 +14,11 @@ In each Chrome profile:
 1. Download the zip from a release, or run `pnpm build:extension`, and unpack it.
 2. Open `chrome://extensions`, enable Developer mode, choose Load unpacked and select the folder.
 3. Open the extension's options.
-4. Enter the repository as `owner/name` (`Repozytorium`) and the token (`Token GitHub`).
-5. On first setup choose `Wygeneruj klucz` (Generate key) and store it in a password manager. On every other profile paste the same key into `Klucz szyfrowania`.
-6. Enter a device name (`Nazwa urządzenia`), choose `Połącz` (Connect), then pick or create a sync profile.
+4. Enter the repository as `owner/name` and the token.
+5. On first setup generate the encryption key and store it in a password manager. On every other profile paste the same key.
+6. Enter a device name, connect, then pick or create a sync profile.
+
+The extension's interface is in Polish.
 
 To update, replace the folder with the new version and choose Reload on `chrome://extensions`.
 
