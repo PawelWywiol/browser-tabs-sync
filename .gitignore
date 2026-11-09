@@ -1,0 +1,12 @@
+dist/
+node_modules/
+coverage/
+test-results/
+playwright-report/
+*.log
+*.tsbuildinfo
+.env
+.env.*
+.vscode/
+.idea/
+.DS_Store
