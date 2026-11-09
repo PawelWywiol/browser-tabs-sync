@@ -47,11 +47,17 @@ export async function configure(
   const page = await openExtensionPage(context, "options/index.html");
   await page.getByLabel("Repozytorium (owner/nazwa)").fill("o/r");
   await page.getByLabel("Token GitHub").fill("token");
-  if (keyText) await page.getByLabel("Klucz szyfrowania").fill(keyText);
-  else await page.getByRole("button", { name: "Wygeneruj klucz" }).click();
   await page.getByLabel("Nazwa urządzenia").fill(device);
+  await page.getByRole("button", { name: "Dalej: klucz" }).click();
+  await page.getByLabel("Klucz szyfrowania").waitFor();
+  if (keyText) {
+    await page.getByRole("radio", { name: "Mam już klucz" }).check();
+    await page.getByLabel("Klucz szyfrowania").fill(keyText);
+  } else {
+    await page.getByLabel("Klucz jest już w menedżerze haseł").check();
+  }
   const usedKey = await page.getByLabel("Klucz szyfrowania").inputValue();
-  await page.getByRole("button", { name: "Połącz" }).click();
+  await page.getByRole("button", { name: "Dalej: wybierz profil" }).click();
   await page.getByRole("heading", { name: "Profil synchronizacji" }).waitFor();
   return { page, keyText: usedKey };
 }

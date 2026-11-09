@@ -32,7 +32,7 @@ describe("PopupApp", () => {
     mocks.send.mockResolvedValue({ status: "sent" });
     render(<PopupApp />);
     expect(await screen.findByText(/Praca/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
+    fireEvent.click(screen.getByRole("button", { name: /Wyślij karty/ }));
     expect(await screen.findByText("Wysłano.")).toBeTruthy();
   });
 
@@ -44,7 +44,7 @@ describe("PopupApp", () => {
     });
     mocks.send.mockResolvedValueOnce({ status: "sent" });
     render(<PopupApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Wyślij" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Wyślij karty/ }));
     expect(await screen.findByText(/Laptop/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Nadpisz mimo to" }));
     await waitFor(() => expect(mocks.send).toHaveBeenLastCalledWith(expect.anything(), true));
@@ -54,7 +54,7 @@ describe("PopupApp", () => {
     mocks.send.mockResolvedValueOnce({ status: "invalid" });
     mocks.send.mockResolvedValueOnce({ status: "sent" });
     render(<PopupApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Wyślij" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Wyślij karty/ }));
     expect(await screen.findByText("Dane w repozytorium są nieprawidłowe.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Najpierw pobierz" })).toBeNull();
     expect(screen.getByRole("button", { name: "Anuluj" })).toBeTruthy();
@@ -64,7 +64,7 @@ describe("PopupApp", () => {
 
   it("opens the preview page from the warning and from Pull", async () => {
     render(<PopupApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Pobierz" }));
+    fireEvent.click(await screen.findByRole("button", { name: /pobierz zmiany/ }));
     expect(chrome.tabs.create).toHaveBeenCalledWith({ url: "preview/index.html" });
   });
 });

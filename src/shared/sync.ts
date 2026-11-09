@@ -53,7 +53,7 @@ async function sendChecked(context: SyncContext, force: boolean): Promise<SendRe
   const snapshot = toSnapshot(await capture(), settings.deviceName, new Date().toISOString());
   try {
     const sha = await writeSnapshot(remote, settings.profileId, snapshot, remoteSha);
-    await saveSettings({ lastSeenSha: sha });
+    await saveSettings({ lastSeenSha: sha, lastSentAt: snapshot.sentAt });
     return { status: "sent" };
   } catch (error) {
     if (!(error instanceof GitHubError) || error.kind !== "conflict") throw error;

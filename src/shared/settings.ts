@@ -6,6 +6,7 @@ export type Settings = {
   profileId: string;
   profileName: string;
   lastSeenSha?: string;
+  lastSentAt?: string;
 };
 
 const STORAGE_KEY = "settings";
@@ -19,7 +20,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: { ...(await loadSettings()), ...patch } });
 }
 
-export async function clearLastSeenSha(): Promise<void> {
-  const { lastSeenSha: _removed, ...rest } = await loadSettings();
+export async function clearProfileSyncState(): Promise<void> {
+  const { lastSeenSha: _sha, lastSentAt: _sent, ...rest } = await loadSettings();
   await chrome.storage.local.set({ [STORAGE_KEY]: rest });
 }

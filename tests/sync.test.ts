@@ -61,7 +61,10 @@ describe("send", () => {
   it("writes when the remote is empty", async () => {
     mocks.readSnapshot.mockResolvedValue(null);
     expect(await send(context())).toEqual({ status: "sent" });
-    expect(mocks.saveSettings).toHaveBeenCalledWith({ lastSeenSha: "new-sha" });
+    expect(mocks.saveSettings).toHaveBeenCalledWith({
+      lastSeenSha: "new-sha",
+      lastSentAt: expect.any(String),
+    });
   });
 
   it("writes when the remote matches the last seen version", async () => {

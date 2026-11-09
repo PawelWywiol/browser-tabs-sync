@@ -1,7 +1,8 @@
 import { useSignal } from "@preact/signals";
+import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { ApplyFailure } from "../../shared/apply";
-import type { BookmarkChange, TabChange } from "../../shared/diff";
+import type { BookmarkChange, ChangeSet, TabChange } from "../../shared/diff";
 import { listBackups } from "../../shared/idb";
 import {
   loadContext,
@@ -12,8 +13,54 @@ import {
   type SyncContext,
 } from "../../shared/sync";
 import { errorMessage } from "../shared/errors";
+import { formatWhen, hostOf, plural } from "../shared/format";
 
 type Phase = "loading" | "empty" | "ready" | "applying" | "done";
+type GroupView = { title: string | undefined; color: string | undefined; tabs: TabChange[] };
+type WindowView = { slot: number; label: string; groups: GroupView[] };
+
+const TABS = { one: "kartę", few: "karty", many: "kart" };
+const FAVORITES = { one: "ulubioną", few: "ulubione", many: "ulubionych" };
+const CHANGES = { one: "zmianę", few: "zmiany", many: "zmian" };
+
+export function buildWindows(changes: ChangeSet, localWindowCount: number): WindowView[] {
+  const slots = new Map<number, Map<string | undefined, GroupView>>();
+  for (const tab of changes.tabs) {
+    const pair = changes.windowPairs[tab.windowIndex] ?? -1;
+    const slot =
+      tab.kind === "close"
+        ? tab.windowIndex
+        : pair >= 0
+          ? pair
+          : localWindowCount + tab.windowIndex;
+    const groups = slots.get(slot) ?? new Map<string | undefined, GroupView>();
+    slots.set(slot, groups);
+    const group = groups.get(tab.groupTitle) ?? {
+      title: tab.groupTitle,
+      color: tab.groupColor,
+      tabs: [],
+    };
+    groups.set(tab.groupTitle, group);
+    group.tabs.push(tab);
+  }
+  return [...slots.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([slot, groups]) => ({
+      slot,
+      label: slot < localWindowCount ? `Okno ${slot + 1}` : "Nowe okno",
+      groups: [...groups.values()].sort(
+        (a, b) => Number(a.title === undefined) - Number(b.title === undefined),
+      ),
+    }));
+}
+
+function State({ children }: { children: ComponentChildren }) {
+  return (
+    <main class="page">
+      <div class="state">{children}</div>
+    </main>
+  );
+}
 
 export function PreviewApp() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -89,19 +136,52 @@ export function PreviewApp() {
     }
   }
 
-  if (phase === "loading") return <p>Ładowanie…</p>;
-  if (phase === "empty")
-    return error ? <p class="error">{error}</p> : <p>Brak danych do pobrania w tym profilu.</p>;
+  const errorLine = error && (
+    <p class="error" role="alert">
+      {error}
+    </p>
+  );
+
+  if (phase === "loading") {
+    return (
+      <State>
+        <p class="muted">Ładowanie…</p>
+      </State>
+    );
+  }
+  if (phase === "empty") {
+    return (
+      <State>
+        {error ? (
+          <>
+            <h1>Nie można pobrać zmian</h1>
+            {errorLine}
+            <button class="button" onClick={() => chrome.runtime.openOptionsPage()}>
+              Otwórz ustawienia
+            </button>
+          </>
+        ) : (
+          <>
+            <h1>Brak danych do pobrania</h1>
+            <p class="muted">Wyślij karty z innego komputera, a pojawią się tutaj.</p>
+          </>
+        )}
+      </State>
+    );
+  }
   if (!plan) return null;
 
   if (phase === "done") {
     return (
-      <main>
+      <State>
         {failures.length === 0 ? (
-          <p>Gotowe.</p>
+          <>
+            <h1>Gotowe.</h1>
+            <p class="muted">Poprzedni układ jest w kopiach lokalnych w ustawieniach.</p>
+          </>
         ) : (
-          <section>
-            <p>Część zmian pominięto:</p>
+          <>
+            <h1>Część zmian pominięto</h1>
             <ul>
               {failures.map((failure, index) => (
                 <li key={index}>
@@ -109,58 +189,104 @@ export function PreviewApp() {
                 </li>
               ))}
             </ul>
-            <button onClick={restore}>Przywróć kopię</button>
-            {restored && <p>Przywrócono kopię.</p>}
-          </section>
+            <button class="button" onClick={restore}>
+              Przywróć kopię
+            </button>
+            {restored && (
+              <p class="muted" role="status">
+                Przywrócono kopię.
+              </p>
+            )}
+          </>
         )}
-        {error && <p class="error">{error}</p>}
-      </main>
+        {errorLine}
+      </State>
     );
   }
 
   const { tabs, bookmarks } = plan.changes;
-  const opens = tabs.filter((t) => t.kind === "open");
-  const closes = tabs.filter((t) => t.kind === "close");
-  const isChecked = (id: string) => selected.value.has(id);
+  const applying = phase === "applying";
 
   if (tabs.length === 0 && bookmarks.length === 0) {
     return (
-      <main>
-        <p>Brak zmian. Układ kart i grup zostanie dopasowany po zatwierdzeniu.</p>
-        <button disabled={phase === "applying"} onClick={confirm}>
+      <State>
+        <h1>Karty i ulubione są aktualne</h1>
+        <p class="muted">Brak zmian. Układ kart i grup zostanie dopasowany po zatwierdzeniu.</p>
+        <button class="button primary" disabled={applying} onClick={confirm}>
           Zastosuj
         </button>
-      </main>
+        {errorLine}
+      </State>
     );
   }
 
+  const isChecked = (id: string) => selected.value.has(id);
+  const chosen = (items: { id: string }[]) => items.filter((item) => isChecked(item.id)).length;
+  const opens = chosen(tabs.filter((t) => t.kind === "open"));
+  const closes = chosen(tabs.filter((t) => t.kind === "close"));
+  const favorites = chosen(bookmarks);
+  const summary =
+    [
+      opens > 0 && `otworzy ${plural(opens, TABS)}`,
+      closes > 0 && `zamknie ${plural(closes, TABS)}`,
+      favorites > 0 && `zmieni ${plural(favorites, FAVORITES)}`,
+    ]
+      .filter(Boolean)
+      .join(", ") || "dopasuje tylko układ kart";
+  const check = { isChecked, setChecked };
+
   return (
-    <main>
-      <h1>Pobierz zmiany</h1>
-      <p>
-        Wysłane z: <strong>{plan.snapshot.deviceName}</strong>,{" "}
-        {new Date(plan.snapshot.sentAt).toLocaleString("pl-PL")}
-      </p>
-      <TabSection
-        heading="Karty do otwarcia"
-        action="otwarcie"
-        items={opens}
-        isChecked={isChecked}
-        setChecked={setChecked}
-      />
-      <TabSection
-        heading="Karty do zamknięcia"
-        action="zamknięcie"
-        items={closes}
-        isChecked={isChecked}
-        setChecked={setChecked}
-      />
-      <BookmarkSection items={bookmarks} isChecked={isChecked} setChecked={setChecked} />
-      <button disabled={phase === "applying"} onClick={confirm}>
-        Zastosuj
-      </button>
-      {error && <p class="error">{error}</p>}
-    </main>
+    <>
+      <header class="bar">
+        <div class="bar-inner">
+          <div class="bar-text">
+            <h1>Zmiany z komputera {plan.snapshot.deviceName}</h1>
+            <p class="muted">
+              {summary[0]!.toUpperCase() + summary.slice(1)}. Wysłano{" "}
+              {formatWhen(plan.snapshot.sentAt)}.
+            </p>
+          </div>
+          <button class="button primary" disabled={applying} onClick={confirm}>
+            {applying ? "Stosuję…" : `Zastosuj ${plural(opens + closes + favorites, CHANGES)}`}
+          </button>
+        </div>
+      </header>
+      <main class="page">
+        {errorLine}
+        {buildWindows(plan.changes, plan.local.windows.length).map((view) => (
+          <section class="window" key={view.slot}>
+            <div class="heading-row">
+              <h2>{view.label}</h2>
+              <Toggle
+                text="Całe okno"
+                label={`Całe okno: ${view.label}`}
+                ids={view.groups.flatMap((g) => g.tabs.map((t) => t.id))}
+                {...check}
+              />
+            </div>
+            {view.groups.map((group) => (
+              <Group key={group.title ?? ""} group={group} {...check} />
+            ))}
+          </section>
+        ))}
+        {bookmarks.length > 0 && (
+          <section class="bookmarks">
+            <div class="heading-row">
+              <h2>Ulubione</h2>
+              <Toggle
+                text="Wszystkie"
+                label="Wszystkie ulubione"
+                ids={bookmarks.map((b) => b.id)}
+                {...check}
+              />
+            </div>
+            {bookmarks.map((item) => (
+              <BookmarkRow key={item.id} item={item} {...check} />
+            ))}
+          </section>
+        )}
+      </main>
+    </>
   );
 }
 
@@ -169,106 +295,118 @@ type CheckProps = {
   setChecked: (ids: string[], checked: boolean) => void;
 };
 
-function GroupToggle({
+function Toggle({
+  text,
   label,
   ids,
   isChecked,
   setChecked,
-}: CheckProps & { label: string; ids: string[] }) {
+}: CheckProps & { text: string; label: string; ids: string[] }) {
+  const all = ids.every(isChecked);
   return (
-    <label>
+    <label class="toggle">
+      <span aria-hidden="true">{text}</span>
       <input
         type="checkbox"
-        checked={ids.every(isChecked)}
+        aria-label={label}
+        checked={all}
+        ref={(el) => {
+          if (el) el.indeterminate = !all && ids.some(isChecked);
+        }}
         onChange={(e) => setChecked(ids, e.currentTarget.checked)}
       />
-      {label}
     </label>
   );
 }
 
-function Item({
-  id,
-  title,
-  url,
-  isChecked,
-  setChecked,
-}: CheckProps & { id: string; title: string; url: string }) {
+function Group({ group, ...check }: CheckProps & { group: GroupView }) {
+  const grouped = group.title !== undefined;
+  const name = grouped ? group.title || "Grupa bez nazwy" : "Bez grupy";
+  const color = grouped ? (group.color ?? "grey") : undefined;
   return (
-    <label>
-      <input
-        type="checkbox"
-        checked={isChecked(id)}
-        onChange={(e) => setChecked([id], e.currentTarget.checked)}
-      />
-      {title} {url}
-    </label>
-  );
-}
-
-function TabSection({
-  heading,
-  action,
-  items,
-  ...check
-}: CheckProps & { heading: string; action: string; items: TabChange[] }) {
-  if (items.length === 0) return null;
-  const windows = [...new Set(items.map((t) => t.windowIndex))];
-  return (
-    <section>
-      <h2>
-        {heading} ({items.length})
-      </h2>
-      {windows.map((windowIndex) => {
-        const inWindow = items.filter((t) => t.windowIndex === windowIndex);
-        const groups = [...new Set(inWindow.map((t) => t.groupTitle))];
-        return (
-          <fieldset key={windowIndex}>
-            <legend>
-              <GroupToggle
-                label={`Okno ${windowIndex + 1} (${action})`}
-                ids={inWindow.map((t) => t.id)}
-                {...check}
-              />
-            </legend>
-            {groups.map((groupTitle) => {
-              const inGroup = inWindow.filter((t) => t.groupTitle === groupTitle);
-              return (
-                <div key={groupTitle ?? ""}>
-                  {groupTitle !== undefined && (
-                    <GroupToggle
-                      label={`Grupa: ${groupTitle} (${action})`}
-                      ids={inGroup.map((t) => t.id)}
-                      {...check}
-                    />
-                  )}
-                  {inGroup.map((tab) => (
-                    <Item key={tab.id} id={tab.id} title={tab.title} url={tab.url} {...check} />
-                  ))}
-                </div>
-              );
-            })}
-          </fieldset>
-        );
-      })}
-    </section>
-  );
-}
-
-function BookmarkSection({ items, ...check }: CheckProps & { items: BookmarkChange[] }) {
-  if (items.length === 0) return null;
-  return (
-    <section>
-      <h2>Ulubione do zmiany ({items.length})</h2>
-      {items.map((item) => (
-        <Item
-          key={item.id}
-          id={item.id}
-          title={`${item.kind === "add" ? "Dodaj" : "Usuń"}: ${[...item.path, item.title].join(" / ")}`}
-          url={item.url ?? ""}
+    <div class="group">
+      <div class="heading-row">
+        <span class="chip" data-color={color}>
+          {name}
+        </span>
+        <Toggle
+          text="Cała grupa"
+          label={`Cała grupa: ${name}`}
+          ids={group.tabs.map((t) => t.id)}
           {...check}
         />
-      ))}
-    </section>
+      </div>
+      <div class="group-body">
+        <div class="rail" data-color={color} aria-hidden="true" />
+        <div class="rows">
+          {group.tabs.map((tab) => (
+            <Row
+              key={tab.id}
+              id={tab.id}
+              adds={tab.kind === "open"}
+              verb={tab.kind === "open" ? "Otwórz" : "Zamknij"}
+              title={tab.title || hostOf(tab.url)}
+              url={tab.url}
+              letter
+              {...check}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BookmarkRow({ item, ...check }: CheckProps & { item: BookmarkChange }) {
+  return (
+    <Row
+      id={item.id}
+      adds={item.kind === "add"}
+      verb={item.kind === "add" ? "Dodaj" : "Usuń"}
+      title={[...item.path, item.title].join(" / ")}
+      url={item.url ?? ""}
+      {...check}
+    />
+  );
+}
+
+function Row({
+  id,
+  adds,
+  verb,
+  title,
+  url,
+  letter = false,
+  isChecked,
+  setChecked,
+}: CheckProps & {
+  id: string;
+  adds: boolean;
+  verb: string;
+  title: string;
+  url: string;
+  letter?: boolean;
+}) {
+  const host = url ? hostOf(url) : "";
+  const on = isChecked(id);
+  return (
+    <label class={on ? "row" : "row off"}>
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => setChecked([id], e.currentTarget.checked)}
+      />
+      <span class={adds ? "sign" : "sign close"} aria-hidden="true">
+        {adds ? "+" : "−"}
+      </span>
+      <span class="vh">{verb} </span>
+      {letter && (
+        <span class="letter" aria-hidden="true">
+          {host[0]?.toUpperCase()}
+        </span>
+      )}
+      <span class="row-title">{title} </span>
+      <span class="row-host">{host}</span>
+    </label>
   );
 }
