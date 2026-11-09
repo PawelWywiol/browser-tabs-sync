@@ -141,6 +141,17 @@ describe("apply tabs", () => {
     });
   });
 
+  it("pins the first tab of a created window", async () => {
+    const empty: BrowserState = { windows: [], bookmarks: [] };
+    const pinnedFirst: BrowserState = {
+      windows: [{ groups: [], tabs: [{ ...base, url: "a", pinned: true }] }],
+      bookmarks: [],
+    };
+    const changes = diff(empty, pinnedFirst);
+    expect(await apply(empty, pinnedFirst, changes, all(changes))).toEqual([]);
+    expect(api.tabs.update).toHaveBeenCalledWith(expect.any(Number), { pinned: true });
+  });
+
   it("reports a refused URL and continues", async () => {
     api.tabs.create.mockRejectedValueOnce(new Error("refused"));
     const changes = diff(local, target);

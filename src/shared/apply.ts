@@ -36,7 +36,12 @@ async function ensureTabs(
     if (!created?.id) return undefined;
     windowId = created.id;
     const firstTab = created.tabs?.[0]?.id;
-    if (firstTab !== undefined) placed.set(first.targetTab!, firstTab);
+    if (firstTab !== undefined) {
+      placed.set(first.targetTab!, firstTab);
+      if (target.tabs[first.targetTab!]!.pinned) {
+        await attempt(failures, first.url, () => chrome.tabs.update(firstTab, { pinned: true }));
+      }
+    }
   }
   for (const open of queue) {
     const created = await attempt(failures, open.url, () =>
