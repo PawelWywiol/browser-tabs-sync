@@ -63,9 +63,9 @@ export async function readTabs(page: Page): Promise<TabInfo[]> {
     const tabs = await chrome.tabs.query({});
     const groups = await chrome.tabGroups.query({});
     return tabs
-      .filter((tab) => tab.url?.startsWith("https://"))
+      .filter((tab) => (tab.url || tab.pendingUrl || "").startsWith("https://"))
       .map((tab) => ({
-        url: tab.url!,
+        url: tab.url || tab.pendingUrl!,
         pinned: tab.pinned,
         group: groups.find((group) => group.id === tab.groupId)?.title ?? null,
       }));
