@@ -1,3 +1,4 @@
 import { render } from "preact";
+import { PreviewApp } from "../ui/preview/App";
 
-render(<main>Browser Tabs Sync</main>, document.getElementById("app")!);
+render(<PreviewApp />, document.getElementById("app")!);
