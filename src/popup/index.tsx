@@ -1,3 +1,4 @@
 import { render } from "preact";
+import { PopupApp } from "../ui/popup/App";
 
-render(<main>Browser Tabs Sync</main>, document.getElementById("app")!);
+render(<PopupApp />, document.getElementById("app")!);

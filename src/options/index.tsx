@@ -1,3 +1,4 @@
 import { render } from "preact";
+import { OptionsApp } from "../ui/options/App";
 
-render(<main>Browser Tabs Sync</main>, document.getElementById("app")!);
+render(<OptionsApp />, document.getElementById("app")!);
