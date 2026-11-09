@@ -1,9 +1,17 @@
-import { flattenBookmarks, type BookmarkChange, type ChangeSet, type TabChange } from "./diff";
+import {
+  flattenBookmarks,
+  type BookmarkChange,
+  type ChangeSet,
+  type TabChange,
+  type TabMatch,
+} from "./diff";
 import type { BookmarkNode, BrowserState, BrowserWindow, FolderType } from "./types";
 
 export type ApplyFailure = { url: string; message: string };
 
 type Failures = ApplyFailure[];
+
+const NO_GROUP = -1;
 
 async function attempt<T>(
   failures: Failures,
@@ -27,13 +35,13 @@ async function ensureTabs(
 ): Promise<number | undefined> {
   const queue = [...opens];
   let windowId = pairedWindowId;
-  if (windowId === undefined) {
+  while (windowId === undefined) {
     const first = queue.shift();
     if (!first) return undefined;
     const created = await attempt(failures, first.url, () =>
       chrome.windows.create({ url: first.url, focused: false }),
     );
-    if (!created?.id) return undefined;
+    if (!created?.id) continue;
     windowId = created.id;
     const firstTab = created.tabs?.[0]?.id;
     if (firstTab !== undefined) {
@@ -57,15 +65,22 @@ async function ensureTabs(
   return windowId;
 }
 
-async function applyWindow(
+type WindowPlan = {
+  windowId: number;
+  target: BrowserWindow;
+  localWindow: BrowserWindow | undefined;
+  matches: TabMatch[];
+  placed: Map<number, number>;
+};
+
+async function openWindowTabs(
   windowIndex: number,
   local: BrowserState,
   target: BrowserWindow,
   changes: ChangeSet,
   selected: ReadonlySet<string>,
-  currentWindowId: number | undefined,
   failures: Failures,
-): Promise<void> {
+): Promise<WindowPlan | undefined> {
   const pair = changes.windowPairs[windowIndex]!;
   const localWindow = pair >= 0 ? local.windows[pair] : undefined;
   const matches = changes.matches.filter((m) => m.targetWindow === windowIndex);
@@ -74,8 +89,60 @@ async function applyWindow(
     (c) => c.kind === "open" && c.windowIndex === windowIndex && selected.has(c.id),
   );
   const windowId = await ensureTabs(target, localWindow?.localId, opens, placed, failures);
-  if (windowId === undefined) return;
+  return windowId === undefined ? undefined : { windowId, target, localWindow, matches, placed };
+}
 
+async function joinGroup(
+  windowId: number,
+  existingId: number | undefined,
+  tabIds: [number, ...number[]],
+): Promise<number> {
+  const reused =
+    existingId === undefined
+      ? undefined
+      : await chrome.tabs.group({ groupId: existingId, tabIds }).catch(() => undefined);
+  return reused ?? chrome.tabs.group({ createProperties: { windowId }, tabIds });
+}
+
+async function restoreOrder(
+  windowId: number,
+  target: BrowserWindow,
+  ordered: [number, number][],
+  failures: Failures,
+): Promise<void> {
+  const live = await attempt(failures, "", () => chrome.tabs.query({ windowId }));
+  if (!live) return;
+  const placedIds = new Set(ordered.map(([, id]) => id));
+  const liveOrder = live.filter((tab) => placedIds.has(tab.id!));
+  if (ordered.every(([, id], position) => liveOrder[position]?.id === id)) return;
+
+  let index = live.filter((tab) => tab.pinned).length;
+  const movedGroups = new Set<number>();
+  for (const [targetTab, tabId] of ordered) {
+    const wanted = target.tabs[targetTab]!;
+    if (wanted.pinned) continue;
+    const groupId = live.find((tab) => tab.id === tabId)?.groupId ?? NO_GROUP;
+    if (groupId === NO_GROUP) {
+      const position = index++;
+      await attempt(failures, wanted.url, () =>
+        chrome.tabs.move(tabId, { windowId, index: position }),
+      );
+    } else if (!movedGroups.has(groupId)) {
+      movedGroups.add(groupId);
+      const position = index;
+      index += live.filter((tab) => tab.groupId === groupId).length;
+      await attempt(failures, wanted.url, () =>
+        chrome.tabGroups.move(groupId, { index: position }),
+      );
+    }
+  }
+}
+
+async function alignWindow(
+  { windowId, target, localWindow, matches, placed }: WindowPlan,
+  currentWindowId: number | undefined,
+  failures: Failures,
+): Promise<void> {
   const ordered = [...placed.entries()].sort(([a], [b]) => a - b);
   const localTabs = new Map((localWindow?.tabs ?? []).map((t) => [t.localId!, t]));
 
@@ -95,26 +162,19 @@ async function applyWindow(
     );
   }
 
-  for (const [targetTab, tabId] of ordered) {
-    const wanted = target.tabs[targetTab]!;
-    if (!wanted.groupRef && localTabs.get(tabId)?.groupRef) {
-      await attempt(failures, wanted.url, () => chrome.tabs.ungroup(tabId));
-    }
-  }
-
+  const claimed = new Set<number>();
   const collapsedGroups: number[] = [];
   for (const group of target.groups) {
     const tabIds = ordered
       .filter(([t]) => target.tabs[t]!.groupRef === group.ref)
       .map(([, id]) => id);
     if (tabIds.length === 0) continue;
-    const existing = localWindow?.groups.find((g) => g.title === group.title);
+    const existing = localWindow?.groups.find(
+      (g) => g.title === group.title && !claimed.has(g.localId!),
+    );
+    if (existing) claimed.add(existing.localId!);
     const groupId = await attempt(failures, group.title, () =>
-      chrome.tabs.group(
-        existing
-          ? { groupId: existing.localId!, tabIds: tabIds as [number, ...number[]] }
-          : { createProperties: { windowId }, tabIds: tabIds as [number, ...number[]] },
-      ),
+      joinGroup(windowId, existing?.localId, tabIds as [number, ...number[]]),
     );
     if (groupId === undefined) continue;
     await attempt(failures, group.title, () =>
@@ -126,6 +186,15 @@ async function applyWindow(
     );
     if (group.collapsed) collapsedGroups.push(groupId);
   }
+
+  for (const [targetTab, tabId] of ordered) {
+    const wanted = target.tabs[targetTab]!;
+    if (!wanted.groupRef) {
+      await attempt(failures, wanted.url, () => chrome.tabs.ungroup(tabId));
+    }
+  }
+
+  await restoreOrder(windowId, target, ordered, failures);
 
   const active = ordered.find(([t]) => target.tabs[t]!.active);
   if (active && windowId !== currentWindowId) {
@@ -245,14 +314,17 @@ export async function apply(
   const failures: Failures = [];
   const current = await chrome.tabs.getCurrent();
 
+  const plans: WindowPlan[] = [];
   for (const [windowIndex, window] of target.windows.entries()) {
-    await applyWindow(windowIndex, local, window, changes, selected, current?.windowId, failures);
+    const plan = await openWindowTabs(windowIndex, local, window, changes, selected, failures);
+    if (plan) plans.push(plan);
   }
   for (const change of changes.tabs) {
     if (change.kind === "close" && selected.has(change.id)) {
       await attempt(failures, change.url, () => chrome.tabs.remove(change.localId!));
     }
   }
+  for (const plan of plans) await alignWindow(plan, current?.windowId, failures);
 
   await applyBookmarkChanges(
     local,

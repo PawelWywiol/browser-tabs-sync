@@ -14,8 +14,9 @@ const api = {
     group: vi.fn(),
     ungroup: vi.fn(),
     getCurrent: vi.fn(),
+    query: vi.fn(),
   },
-  tabGroups: { update: vi.fn() },
+  tabGroups: { update: vi.fn(), move: vi.fn() },
   bookmarks: {
     create: vi.fn(),
     remove: vi.fn(),
@@ -32,6 +33,9 @@ beforeEach(() => {
   api.windows.create.mockImplementation(async () => ({ id: 77, tabs: [{ id: nextTab++ }] }));
   api.tabs.group.mockResolvedValue(9);
   api.tabs.getCurrent.mockResolvedValue({ windowId: 999 });
+  api.tabs.query.mockImplementation(async () =>
+    api.tabs.move.mock.calls.map(([id]) => ({ id, groupId: -1, pinned: false })),
+  );
   api.bookmarks.create.mockImplementation(async (p) => ({ id: `new-${p.title}` }));
   api.bookmarks.getTree.mockResolvedValue([{ children: [] }]);
   api.bookmarks.getChildren.mockResolvedValue([]);
@@ -158,6 +162,178 @@ describe("apply tabs", () => {
     const failures = await apply(local, target, changes, all(changes));
     expect(failures).toEqual([{ url: "new", message: "Error: refused" }]);
     expect(api.tabs.remove).toHaveBeenCalledWith(11);
+  });
+
+  it("closes selected tabs before aligning the window", async () => {
+    const order: string[] = [];
+    api.tabs.remove.mockImplementation(async () => order.push("remove"));
+    api.tabs.move.mockImplementation(async () => order.push("move"));
+    const changes = diff(local, target);
+    await apply(local, target, changes, all(changes));
+    expect(order[0]).toBe("remove");
+    expect(order).toContain("move");
+  });
+
+  describe("groups", () => {
+    const tab = (url: string, localId: number, groupRef?: string) => ({
+      ...base,
+      url,
+      localId,
+      ...(groupRef ? { groupRef } : {}),
+    });
+    const group = (ref: string, title: string, localId?: number) => ({
+      ref,
+      title,
+      color: "red",
+      collapsed: false,
+      ...(localId === undefined ? {} : { localId }),
+    });
+    const state = (
+      groups: BrowserState["windows"][number]["groups"],
+      tabs: BrowserState["windows"][number]["tabs"],
+    ): BrowserState => ({
+      windows: [{ localId: 1, groups, tabs }],
+      bookmarks: [],
+    });
+
+    it("groups before ungrouping and ungroups every tab without a group", async () => {
+      const order: string[] = [];
+      api.tabs.group.mockImplementation(async () => {
+        order.push("group");
+        return 40;
+      });
+      api.tabs.ungroup.mockImplementation(async () => order.push("ungroup"));
+      const before = state([group("g1", "Work", 40)], [tab("x", 10, "g1"), tab("y", 11)]);
+      const after = state(
+        [group("t", "Work")],
+        [
+          { ...base, url: "x" },
+          { ...base, url: "y", groupRef: "t" },
+        ],
+      );
+      const changes = diff(before, after);
+      expect(await apply(before, after, changes, all(changes))).toEqual([]);
+      expect(order).toEqual(["group", "ungroup"]);
+      expect(api.tabs.ungroup).toHaveBeenCalledWith(10);
+      expect(api.tabs.ungroup).not.toHaveBeenCalledWith(11);
+    });
+
+    it("reuses a matching local group", async () => {
+      const before = state([group("g1", "Work", 40)], [tab("x", 10, "g1")]);
+      const after = state([group("t", "Work")], [{ ...base, url: "x", groupRef: "t" }]);
+      const changes = diff(before, after);
+      await apply(before, after, changes, all(changes));
+      expect(api.tabs.group).toHaveBeenCalledWith({ groupId: 40, tabIds: [10] });
+    });
+
+    it("claims each local group once", async () => {
+      const before = state([group("g1", "", 40)], [tab("a", 10, "g1"), tab("b", 11)]);
+      const after = state(
+        [group("t1", ""), group("t2", "")],
+        [
+          { ...base, url: "a", groupRef: "t1" },
+          { ...base, url: "b", groupRef: "t2" },
+        ],
+      );
+      const changes = diff(before, after);
+      await apply(before, after, changes, all(changes));
+      expect(api.tabs.group.mock.calls.map((c) => c[0])).toEqual([
+        { groupId: 40, tabIds: [10] },
+        { createProperties: { windowId: 1 }, tabIds: [11] },
+      ]);
+    });
+
+    it("creates a new group when the claimed group no longer exists", async () => {
+      api.tabs.group.mockRejectedValueOnce(new Error("No group with id"));
+      const before = state([group("g1", "Work", 40)], [tab("x", 10, "g1")]);
+      const after = state([group("t", "Work")], [{ ...base, url: "x", groupRef: "t" }]);
+      const changes = diff(before, after);
+      expect(await apply(before, after, changes, all(changes))).toEqual([]);
+      expect(api.tabs.group).toHaveBeenLastCalledWith({
+        createProperties: { windowId: 1 },
+        tabIds: [10],
+      });
+    });
+
+    it("reports a failed group and continues", async () => {
+      api.tabs.group.mockRejectedValue(new Error("denied"));
+      const before = state([], [tab("x", 10)]);
+      const after = state([group("t", "Work")], [{ ...base, url: "x", groupRef: "t" }]);
+      const changes = diff(before, after);
+      expect(await apply(before, after, changes, all(changes))).toEqual([
+        { url: "Work", message: "Error: denied" },
+      ]);
+    });
+
+    it("moves groups and tabs back into target order when grouping displaced them", async () => {
+      api.tabs.query.mockResolvedValue([
+        { id: 11, groupId: -1, pinned: false },
+        { id: 10, groupId: 40, pinned: false },
+        { id: 12, groupId: -1, pinned: false },
+      ]);
+      const before = state(
+        [group("g1", "Work", 40)],
+        [tab("x", 12, "g1"), tab("y", 10), tab("z", 11)],
+      );
+      const after = state(
+        [group("t", "Work")],
+        [
+          { ...base, url: "y", groupRef: "t" },
+          { ...base, url: "z" },
+          { ...base, url: "x" },
+        ],
+      );
+      const changes = diff(before, after);
+      expect(await apply(before, after, changes, all(changes))).toEqual([]);
+      expect(api.tabGroups.move).toHaveBeenCalledWith(40, { index: 0 });
+      expect(api.tabs.move).toHaveBeenLastCalledWith(12, { windowId: 1, index: 2 });
+    });
+  });
+
+  it("retries a refused first URL until a window is created", async () => {
+    api.windows.create.mockRejectedValueOnce(new Error("refused"));
+    const empty: BrowserState = { windows: [], bookmarks: [] };
+    const wanted: BrowserState = {
+      windows: [
+        {
+          groups: [],
+          tabs: [
+            { ...base, url: "bad" },
+            { ...base, url: "good" },
+            { ...base, url: "last" },
+          ],
+        },
+      ],
+      bookmarks: [],
+    };
+    const changes = diff(empty, wanted);
+    expect(await apply(empty, wanted, changes, all(changes))).toEqual([
+      { url: "bad", message: "Error: refused" },
+    ]);
+    expect(api.windows.create.mock.calls.map((c) => c[0].url)).toEqual(["bad", "good"]);
+    expect(api.tabs.create).toHaveBeenCalledWith(expect.objectContaining({ url: "last" }));
+  });
+
+  it("reports every URL when no window can be created", async () => {
+    api.windows.create.mockRejectedValue(new Error("refused"));
+    const empty: BrowserState = { windows: [], bookmarks: [] };
+    const wanted: BrowserState = {
+      windows: [
+        {
+          groups: [],
+          tabs: [
+            { ...base, url: "a" },
+            { ...base, url: "b" },
+          ],
+        },
+      ],
+      bookmarks: [],
+    };
+    const changes = diff(empty, wanted);
+    expect((await apply(empty, wanted, changes, all(changes))).map((f) => f.url)).toEqual([
+      "a",
+      "b",
+    ]);
   });
 
   it("does not steal focus in the window showing the preview", async () => {

@@ -71,3 +71,47 @@ export async function readTabs(page: Page): Promise<TabInfo[]> {
       }));
   });
 }
+
+export async function arrangeTabs(page: Page, layout: string[]): Promise<void> {
+  await page.evaluate(async (items) => {
+    const stale = (await chrome.tabs.query({})).filter((tab) =>
+      (tab.url || tab.pendingUrl || "").startsWith("https://"),
+    );
+    if (stale.length > 0) await chrome.tabs.remove(stale.map((tab) => tab.id!));
+    const groups = new Map<string, { title: string; tabIds: number[] }>();
+    for (const [index, item] of items.entries()) {
+      const [, pin, name, key, title] = /^(\*?)([\w-]+)(?:\[(\d+):(.*)\])?$/.exec(item)!;
+      const tab = await chrome.tabs.create({
+        url: `https://${name}.test/`,
+        pinned: pin === "*",
+        active: false,
+        index,
+      });
+      if (key) {
+        const group = groups.get(key) ?? { title: title!, tabIds: [] };
+        group.tabIds.push(tab.id!);
+        groups.set(key, group);
+      }
+    }
+    for (const { title, tabIds } of groups.values()) {
+      const groupId = await chrome.tabs.group({ tabIds: tabIds as [number, ...number[]] });
+      await chrome.tabGroups.update(groupId, { title });
+    }
+  }, layout);
+}
+
+export async function readLayout(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const groups = await chrome.tabGroups.query({});
+    const ordinals = new Map<number, number>();
+    return (await chrome.tabs.query({}))
+      .filter((tab) => (tab.url || tab.pendingUrl || "").startsWith("https://"))
+      .map((tab) => {
+        const name = new URL(tab.url || tab.pendingUrl!).host.replace(".test", "");
+        if (tab.groupId === -1) return `${tab.pinned ? "*" : ""}${name}`;
+        if (!ordinals.has(tab.groupId)) ordinals.set(tab.groupId, ordinals.size + 1);
+        const title = groups.find((group) => group.id === tab.groupId)?.title ?? "";
+        return `${name}[${ordinals.get(tab.groupId)}:${title}]`;
+      });
+  });
+}
