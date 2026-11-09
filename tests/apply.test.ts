@@ -16,7 +16,14 @@ const api = {
     getCurrent: vi.fn(),
   },
   tabGroups: { update: vi.fn() },
-  bookmarks: { create: vi.fn(), remove: vi.fn(), getTree: vi.fn(), move: vi.fn(), update: vi.fn() },
+  bookmarks: {
+    create: vi.fn(),
+    remove: vi.fn(),
+    getChildren: vi.fn(),
+    getTree: vi.fn(),
+    move: vi.fn(),
+    update: vi.fn(),
+  },
 };
 
 beforeEach(() => {
@@ -27,6 +34,7 @@ beforeEach(() => {
   api.tabs.getCurrent.mockResolvedValue({ windowId: 999 });
   api.bookmarks.create.mockImplementation(async (p) => ({ id: `new-${p.title}` }));
   api.bookmarks.getTree.mockResolvedValue([{ children: [] }]);
+  api.bookmarks.getChildren.mockResolvedValue([]);
   vi.stubGlobal("chrome", api);
 });
 
@@ -185,7 +193,7 @@ describe("apply bookmarks", () => {
     expect(api.bookmarks.create).toHaveBeenCalledTimes(2);
   });
 
-  it("removes bookmarks before folders and ignores folders that stay non-empty", async () => {
+  const folderRemoval = () => {
     const before = withBookmarks([
       {
         kind: "folder",
@@ -195,12 +203,31 @@ describe("apply bookmarks", () => {
       },
     ]);
     const after = withBookmarks([]);
-    api.bookmarks.remove.mockImplementation(async (id) => {
-      if (id === "f") throw new Error("not empty");
-    });
     const changes = diff(before, after);
+    return { before, after, changes };
+  };
+
+  it("removes an empty folder after its bookmarks", async () => {
+    const { before, after, changes } = folderRemoval();
     expect(await apply(before, after, changes, all(changes))).toEqual([]);
     expect(api.bookmarks.remove.mock.calls.map((c) => c[0])).toEqual(["b", "f"]);
+  });
+
+  it("keeps a folder that still has children without a failure", async () => {
+    const { before, after, changes } = folderRemoval();
+    api.bookmarks.getChildren.mockResolvedValue([{ id: "kept" }]);
+    expect(await apply(before, after, changes, all(changes))).toEqual([]);
+    expect(api.bookmarks.remove).not.toHaveBeenCalledWith("f");
+  });
+
+  it("reports a folder removal error", async () => {
+    const { before, after, changes } = folderRemoval();
+    api.bookmarks.remove.mockImplementation(async (id) => {
+      if (id === "f") throw new Error("denied");
+    });
+    expect(await apply(before, after, changes, all(changes))).toEqual([
+      { url: "F", message: "Error: denied" },
+    ]);
   });
 
   it("aligns order and titles of existing bookmarks", async () => {

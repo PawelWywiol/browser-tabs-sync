@@ -149,7 +149,10 @@ async function applyBookmarkChanges(
     .filter((c) => c.kind === "remove" && c.url === undefined)
     .sort((a, b) => b.path.length - a.path.length);
   for (const folder of folderRemovals) {
-    await chrome.bookmarks.remove(folder.localId!).catch(() => undefined);
+    await attempt(failures, folder.title, async () => {
+      const children = await chrome.bookmarks.getChildren(folder.localId!);
+      if (children.length === 0) await chrome.bookmarks.remove(folder.localId!);
+    });
   }
 
   const folderIds = new Map<string, string>();
