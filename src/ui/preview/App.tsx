@@ -70,10 +70,18 @@ export function PreviewApp() {
   }
 
   async function restore() {
-    const [latest] = await listBackups();
-    if (!latest) return;
     try {
-      await restoreBackup(latest);
+      const [latest] = await listBackups();
+      if (!latest) {
+        setError("Brak kopii do przywrócenia.");
+        return;
+      }
+      const failed = await restoreBackup(latest);
+      if (failed.length > 0) {
+        setError(`Nie przywrócono: ${failed.map((failure) => failure.url).join(", ")}`);
+        return;
+      }
+      setError("");
       setRestored(true);
     } catch (caught) {
       setError(errorMessage(caught));

@@ -115,7 +115,38 @@ describe("PreviewApp", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
     fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
     await waitFor(() => expect(mocks.restoreBackup).toHaveBeenCalledWith(backup));
-    expect(screen.getByText(/https:\/\/a\.test\//)).toBeTruthy();
+    expect(await screen.findByText("Przywrócono kopię.")).toBeTruthy();
+  });
+
+  it("reports failed URLs when restore is partial", async () => {
+    mocks.runPull.mockResolvedValue([{ url: "https://a.test/", message: "refused" }]);
+    mocks.listBackups.mockResolvedValue([{ id: 1 }]);
+    mocks.restoreBackup.mockResolvedValue([{ url: "https://z.test/", message: "x" }]);
+    render(<PreviewApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
+    expect(await screen.findByText("Nie przywrócono: https://z.test/")).toBeTruthy();
+    expect(screen.queryByText("Przywrócono kopię.")).toBeNull();
+  });
+
+  it("reports when there is no backup to restore", async () => {
+    mocks.runPull.mockResolvedValue([{ url: "https://a.test/", message: "refused" }]);
+    mocks.listBackups.mockResolvedValue([]);
+    render(<PreviewApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
+    expect(await screen.findByText("Brak kopii do przywrócenia.")).toBeTruthy();
+  });
+
+  it("shows an error when reading backups fails", async () => {
+    mocks.runPull.mockResolvedValue([{ url: "https://a.test/", message: "refused" }]);
+    mocks.listBackups.mockRejectedValue(new Error("idb down"));
+    render(<PreviewApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
+    await waitFor(() =>
+      expect(document.querySelector(".error")?.textContent).toContain("idb down"),
+    );
   });
 
   it("reports when there is nothing to pull", async () => {
