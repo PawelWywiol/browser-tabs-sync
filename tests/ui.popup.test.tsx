@@ -50,6 +50,18 @@ describe("PopupApp", () => {
     await waitFor(() => expect(mocks.send).toHaveBeenLastCalledWith(expect.anything(), true));
   });
 
+  it("offers overwrite for invalid remote data but not pulling first", async () => {
+    mocks.send.mockResolvedValueOnce({ status: "invalid" });
+    mocks.send.mockResolvedValueOnce({ status: "sent" });
+    render(<PopupApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Wyślij" }));
+    expect(await screen.findByText("Dane w repozytorium są nieprawidłowe.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Najpierw pobierz" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Anuluj" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Nadpisz mimo to" }));
+    await waitFor(() => expect(mocks.send).toHaveBeenLastCalledWith(expect.anything(), true));
+  });
+
   it("opens the preview page from the warning and from Pull", async () => {
     render(<PopupApp />);
     fireEvent.click(await screen.findByRole("button", { name: "Pobierz" }));

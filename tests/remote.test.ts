@@ -4,6 +4,7 @@ import {
   createProfile,
   listProfiles,
   readSnapshot,
+  readSnapshotSha,
   writeSnapshot,
   type Remote,
 } from "../src/shared/remote";
@@ -55,6 +56,15 @@ describe("remote", () => {
     const { id } = await createProfile(remote, "Praca");
     const sha = await writeSnapshot(remote, id, snapshot);
     expect(await readSnapshot(remote, id)).toEqual({ snapshot, sha });
+  });
+
+  it("reads the file SHA without decrypting or parsing", async () => {
+    files.set("profiles/p.enc", { sha: "bad", bytes: new Uint8Array([1, 2, 3]) });
+    expect(await readSnapshotSha(remote, "p")).toBe("bad");
+  });
+
+  it("reports no SHA when nothing was sent yet", async () => {
+    expect(await readSnapshotSha(remote, "missing")).toBeUndefined();
   });
 
   it("returns null when nothing was sent yet", async () => {

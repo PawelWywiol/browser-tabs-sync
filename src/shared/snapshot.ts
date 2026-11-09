@@ -12,7 +12,6 @@ import type {
 export class InvalidSnapshotError extends Error {}
 
 const FOLDER_TYPES: readonly string[] = ["bookmarks-bar", "other", "mobile"];
-const NO_GROUP = -1;
 
 export function isSyncableUrl(url: string): boolean {
   return (
@@ -58,32 +57,34 @@ export async function capture(): Promise<BrowserState> {
   ]);
   const captured: BrowserWindow[] = windows
     .filter((w) => !w.incognito)
-    .map((w) => ({
-      localId: w.id,
-      groups: groups
-        .filter((g) => g.windowId === w.id)
-        .map((g): Group => ({
+    .map((w) => {
+      const windowGroups = groups.filter((g) => g.windowId === w.id);
+      const capturedIds = new Set(windowGroups.map((g) => g.id));
+      return {
+        localId: w.id,
+        groups: windowGroups.map((g): Group => ({
           ref: `g${g.id}`,
           title: g.title ?? "",
           color: g.color,
           collapsed: g.collapsed,
           localId: g.id,
         })),
-      tabs: (w.tabs ?? []).flatMap((t): Tab[] => {
-        const url = t.url || t.pendingUrl || "";
-        if (!isSyncableUrl(url)) return [];
-        return [
-          {
-            url,
-            title: t.title ?? "",
-            pinned: t.pinned,
-            active: t.active,
-            localId: t.id,
-            ...(t.groupId === NO_GROUP ? {} : { groupRef: `g${t.groupId}` }),
-          },
-        ];
-      }),
-    }));
+        tabs: (w.tabs ?? []).flatMap((t): Tab[] => {
+          const url = t.url || t.pendingUrl || "";
+          if (!isSyncableUrl(url)) return [];
+          return [
+            {
+              url,
+              title: t.title ?? "",
+              pinned: t.pinned,
+              active: t.active,
+              localId: t.id,
+              ...(capturedIds.has(t.groupId) ? { groupRef: `g${t.groupId}` } : {}),
+            },
+          ];
+        }),
+      };
+    });
   return { windows: captured, bookmarks };
 }
 

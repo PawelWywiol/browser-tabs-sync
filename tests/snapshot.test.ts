@@ -9,7 +9,7 @@ import {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function stubChrome() {
+function stubChrome(groups = [{ id: 5, windowId: 1, title: "G", color: "blue", collapsed: true }]) {
   vi.stubGlobal("chrome", {
     windows: {
       getAll: async () => [
@@ -49,7 +49,7 @@ function stubChrome() {
       ],
     },
     tabGroups: {
-      query: async () => [{ id: 5, windowId: 1, title: "G", color: "blue", collapsed: true }],
+      query: async () => groups,
     },
     bookmarks: {
       getTree: async () => [
@@ -106,6 +106,19 @@ describe("capture", () => {
     ]);
     expect(state.bookmarks.map((b) => b.folderType)).toEqual(["bookmarks-bar"]);
     expect(state.bookmarks[0]!.children[0]).toMatchObject({ kind: "folder", title: "F" });
+  });
+
+  it("drops a group reference whose group was not captured", async () => {
+    stubChrome([]);
+    const state = await capture();
+    expect(state.windows[0]!.tabs[1]).not.toHaveProperty("groupRef");
+    expect(state.windows[0]!.groups).toEqual([]);
+  });
+
+  it("drops a group reference to a group of another window", async () => {
+    stubChrome([{ id: 5, windowId: 2, title: "G", color: "blue", collapsed: true }]);
+    const state = await capture();
+    expect(state.windows[0]!.tabs[1]).not.toHaveProperty("groupRef");
   });
 
   it("removes local ids from what gets uploaded", async () => {

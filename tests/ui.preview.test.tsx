@@ -129,6 +129,20 @@ describe("PreviewApp", () => {
     expect(screen.queryByText("Przywrócono kopię.")).toBeNull();
   });
 
+  it("clears the success text when a repeated restore fails", async () => {
+    mocks.runPull.mockResolvedValue([{ url: "https://a.test/", message: "refused" }]);
+    mocks.listBackups.mockResolvedValue([{ id: 1 }]);
+    mocks.restoreBackup.mockResolvedValueOnce([]);
+    mocks.restoreBackup.mockResolvedValueOnce([{ url: "https://z.test/", message: "x" }]);
+    render(<PreviewApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
+    expect(await screen.findByText("Przywrócono kopię.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Przywróć kopię" }));
+    expect(await screen.findByText(/Nie przywrócono/)).toBeTruthy();
+    expect(screen.queryByText("Przywrócono kopię.")).toBeNull();
+  });
+
   it("reports when there is no backup to restore", async () => {
     mocks.runPull.mockResolvedValue([{ url: "https://a.test/", message: "refused" }]);
     mocks.listBackups.mockResolvedValue([]);

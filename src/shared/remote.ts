@@ -44,6 +44,10 @@ export async function readSnapshot(
   };
 }
 
+export async function readSnapshotSha(remote: Remote, id: string): Promise<string | undefined> {
+  return (await readFile(remote.config, profilePath(id)))?.sha;
+}
+
 export async function writeSnapshot(
   remote: Remote,
   id: string,

@@ -9,7 +9,7 @@ export function PopupApp() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
-  const [warning, setWarning] = useState<Extract<SendResult, { status: "newer" }> | null>(null);
+  const [warning, setWarning] = useState<Exclude<SendResult, { status: "sent" }> | null>(null);
 
   useEffect(() => {
     loadContext().then(setContext, (error) => {
@@ -61,11 +61,17 @@ export function PopupApp() {
       </button>
       {warning && (
         <section>
-          <p>
-            {warning.deviceName} wysłał zmiany {new Date(warning.sentAt).toLocaleString("pl-PL")},
-            których tu nie masz.
-          </p>
-          <button onClick={openPreview}>Najpierw pobierz</button>{" "}
+          {warning.status === "newer" ? (
+            <>
+              <p>
+                {warning.deviceName} wysłał zmiany{" "}
+                {new Date(warning.sentAt).toLocaleString("pl-PL")}, których tu nie masz.
+              </p>
+              <button onClick={openPreview}>Najpierw pobierz</button>{" "}
+            </>
+          ) : (
+            <p>Dane w repozytorium są nieprawidłowe.</p>
+          )}
           <button onClick={() => runSend(true)}>Nadpisz mimo to</button>{" "}
           <button onClick={() => setWarning(null)}>Anuluj</button>
         </section>

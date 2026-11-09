@@ -70,6 +70,7 @@ export function PreviewApp() {
   }
 
   async function restore() {
+    setRestored(false);
     try {
       const [latest] = await listBackups();
       if (!latest) {
