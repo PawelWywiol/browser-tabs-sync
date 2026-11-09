@@ -17,11 +17,11 @@ vi.mock("../src/shared/sync", () => ({
 }));
 vi.mock("../src/shared/idb", () => ({ listBackups: mocks.listBackups }));
 
-import { PreviewApp } from "../src/ui/preview/App";
+import { buildWindows, PreviewApp } from "../src/ui/preview/App";
 
 const plan = {
   sha: "s",
-  local: { windows: [], bookmarks: [] },
+  local: { windows: [{ groups: [], tabs: [] }], bookmarks: [] },
   snapshot: { deviceName: "Laptop", sentAt: "2026-11-08T10:00:00Z", windows: [], bookmarks: [] },
   changes: {
     windowPairs: [0],
@@ -82,17 +82,20 @@ afterEach(cleanup);
 describe("PreviewApp", () => {
   it("lists all changes checked, with their sections", async () => {
     render(<PreviewApp />);
-    expect(await screen.findByRole("heading", { name: /Karty do otwarcia/ })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /Karty do zamknięcia/ })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Okno 1" })).toBeTruthy();
+    expect(
+      screen.getByText("Otworzy 2 karty, zamknie 1 kartę, zmieni 1 ulubioną.", { exact: false }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Zastosuj 4 zmiany" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Ulubione/ })).toBeTruthy();
-    expect(checkbox("A https://a.test/").checked).toBe(true);
+    expect(checkbox(/a\.test/).checked).toBe(true);
     expect(screen.getByText(/Laptop/)).toBeTruthy();
   });
 
   it("applies only checked items", async () => {
     render(<PreviewApp />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "C https://c.test/" }));
-    fireEvent.click(screen.getByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /c\.test/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Zastosuj/ }));
     await waitFor(() => expect(mocks.runPull).toHaveBeenCalled());
     expect([...mocks.runPull.mock.calls[0]![2]].sort()).toEqual(["add:0", "open:0:0", "open:0:1"]);
     expect(await screen.findByText("Gotowe.")).toBeTruthy();
@@ -100,10 +103,32 @@ describe("PreviewApp", () => {
 
   it("toggles a whole group with one checkbox", async () => {
     render(<PreviewApp />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Grupa: Praca (otwarcie)" }));
-    expect(checkbox("A https://a.test/").checked).toBe(false);
-    expect(checkbox("B https://b.test/").checked).toBe(false);
-    expect(checkbox("C https://c.test/").checked).toBe(true);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Cała grupa: Praca" }));
+    expect(checkbox(/a\.test/).checked).toBe(false);
+    expect(checkbox(/b\.test/).checked).toBe(false);
+    expect(checkbox(/c\.test/).checked).toBe(true);
+  });
+
+  it("updates the counts as items are unchecked", async () => {
+    render(<PreviewApp />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /c\.test/ }));
+    expect(screen.getByRole("button", { name: "Zastosuj 3 zmiany" })).toBeTruthy();
+  });
+
+  it("keeps an unpaired remote window apart from local windows", () => {
+    const views = buildWindows(
+      {
+        windowPairs: [-1],
+        matches: [],
+        bookmarks: [],
+        tabs: [
+          { id: "open:0:0", kind: "open", url: "u", title: "O", windowIndex: 0, targetTab: 0 },
+          { id: "close:1", kind: "close", url: "v", title: "C", windowIndex: 0, localId: 1 },
+        ],
+      },
+      1,
+    );
+    expect(views.map((view) => view.label)).toEqual(["Okno 1", "Nowe okno"]);
   });
 
   it("offers restore after a failure", async () => {
@@ -112,7 +137,7 @@ describe("PreviewApp", () => {
     mocks.listBackups.mockResolvedValue([backup]);
     mocks.restoreBackup.mockResolvedValue([]);
     render(<PreviewApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Zastosuj/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
     await waitFor(() => expect(mocks.restoreBackup).toHaveBeenCalledWith(backup));
     expect(await screen.findByText("Przywrócono kopię.")).toBeTruthy();
@@ -123,7 +148,7 @@ describe("PreviewApp", () => {
     mocks.listBackups.mockResolvedValue([{ id: 1 }]);
     mocks.restoreBackup.mockResolvedValue([{ url: "https://z.test/", message: "x" }]);
     render(<PreviewApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Zastosuj/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
     expect(await screen.findByText("Nie przywrócono: https://z.test/")).toBeTruthy();
     expect(screen.queryByText("Przywrócono kopię.")).toBeNull();
@@ -135,7 +160,7 @@ describe("PreviewApp", () => {
     mocks.restoreBackup.mockResolvedValueOnce([]);
     mocks.restoreBackup.mockResolvedValueOnce([{ url: "https://z.test/", message: "x" }]);
     render(<PreviewApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Zastosuj/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
     expect(await screen.findByText("Przywrócono kopię.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Przywróć kopię" }));
@@ -147,7 +172,7 @@ describe("PreviewApp", () => {
     mocks.runPull.mockResolvedValue([{ url: "https://a.test/", message: "refused" }]);
     mocks.listBackups.mockResolvedValue([]);
     render(<PreviewApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Zastosuj/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
     expect(await screen.findByText("Brak kopii do przywrócenia.")).toBeTruthy();
   });
@@ -156,7 +181,7 @@ describe("PreviewApp", () => {
     mocks.runPull.mockResolvedValue([{ url: "https://a.test/", message: "refused" }]);
     mocks.listBackups.mockRejectedValue(new Error("idb down"));
     render(<PreviewApp />);
-    fireEvent.click(await screen.findByRole("button", { name: "Zastosuj" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Zastosuj/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Przywróć kopię" }));
     await waitFor(() =>
       expect(document.querySelector(".error")?.textContent).toContain("idb down"),

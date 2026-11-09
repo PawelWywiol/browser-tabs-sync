@@ -33,6 +33,15 @@ describe("diff tabs", () => {
     ]);
   });
 
+  it("carries the group colour on tab changes", () => {
+    const group = { ref: "g", title: "Praca", color: "blue", collapsed: false };
+    const target = state([[tab("new", { groupRef: "g" })]]);
+    target.windows[0]!.groups = [group];
+    expect(diff(state([[]]), target).tabs).toMatchObject([
+      { groupTitle: "Praca", groupColor: "blue" },
+    ]);
+  });
+
   it("counts duplicate URLs", () => {
     const changes = diff(state([[tab("a")]]), state([[tab("a"), tab("a")]]));
     expect(changes.tabs).toMatchObject([{ kind: "open", url: "a", targetTab: 1 }]);

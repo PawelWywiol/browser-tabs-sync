@@ -7,6 +7,7 @@ export type TabChange = {
   title: string;
   windowIndex: number;
   groupTitle?: string;
+  groupColor?: string;
   targetTab?: number;
   localId?: number;
 };
@@ -80,7 +81,7 @@ function diffTabs(local: BrowserState, target: BrowserState, windowPairs: number
 
   target.windows.forEach((targetWindow, targetIndex) => {
     const pair = windowPairs[targetIndex]!;
-    const groupTitles = new Map(targetWindow.groups.map((g) => [g.ref, g.title]));
+    const groups = new Map(targetWindow.groups.map((g) => [g.ref, g]));
     targetWindow.tabs.forEach((tab, targetTab) => {
       const candidates = pair >= 0 ? unmatchedLocal[pair]! : [];
       const found = candidates.findIndex((c) => c.url === tab.url);
@@ -92,7 +93,7 @@ function diffTabs(local: BrowserState, target: BrowserState, windowPairs: number
         });
         return;
       }
-      const groupTitle = tab.groupRef ? groupTitles.get(tab.groupRef) : undefined;
+      const group = tab.groupRef ? groups.get(tab.groupRef) : undefined;
       tabs.push({
         id: `open:${targetIndex}:${targetTab}`,
         kind: "open",
@@ -100,15 +101,15 @@ function diffTabs(local: BrowserState, target: BrowserState, windowPairs: number
         title: tab.title,
         windowIndex: targetIndex,
         targetTab,
-        ...(groupTitle === undefined ? {} : { groupTitle }),
+        ...(group ? { groupTitle: group.title, groupColor: group.color } : {}),
       });
     });
   });
 
   unmatchedLocal.forEach((windowTabs, windowIndex) => {
-    const groupTitles = new Map(local.windows[windowIndex]!.groups.map((g) => [g.ref, g.title]));
+    const groups = new Map(local.windows[windowIndex]!.groups.map((g) => [g.ref, g]));
     for (const tab of windowTabs) {
-      const groupTitle = tab.groupRef ? groupTitles.get(tab.groupRef) : undefined;
+      const group = tab.groupRef ? groups.get(tab.groupRef) : undefined;
       tabs.push({
         id: `close:${tab.localId}`,
         kind: "close",
@@ -116,7 +117,7 @@ function diffTabs(local: BrowserState, target: BrowserState, windowPairs: number
         title: tab.title,
         windowIndex,
         localId: tab.localId!,
-        ...(groupTitle === undefined ? {} : { groupTitle }),
+        ...(group ? { groupTitle: group.title, groupColor: group.color } : {}),
       });
     }
   });
