@@ -1,52 +1,22 @@
 import { useEffect, useState } from "preact/hooks";
-import { loadContext, send, type SendResult, type SyncContext } from "../../shared/sync";
+import { loadContext, type SyncContext } from "../../shared/sync";
 import { errorMessage } from "../shared/errors";
 import { formatWhen } from "../shared/format";
 
-const openPreview = () => chrome.tabs.create({ url: chrome.runtime.getURL("preview/index.html") });
+const openPage = (page: string) =>
+  chrome.tabs.create({ url: chrome.runtime.getURL(`${page}/index.html`) });
 const openOptions = () => chrome.runtime.openOptionsPage();
 
 export function PopupApp() {
   const [context, setContext] = useState<SyncContext | null | undefined>(undefined);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [lastSentAt, setLastSentAt] = useState<string | undefined>(undefined);
-  const [warning, setWarning] = useState<Exclude<SendResult, { status: "sent" }> | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    loadContext().then(
-      (loaded) => {
-        setContext(loaded);
-        setLastSentAt(loaded?.settings.lastSentAt);
-      },
-      (error) => {
-        setContext(null);
-        setIsError(true);
-        setMessage(errorMessage(error));
-      },
-    );
+    loadContext().then(setContext, (caught) => {
+      setContext(null);
+      setError(errorMessage(caught));
+    });
   }, []);
-
-  async function runSend(force: boolean) {
-    if (!context) return;
-    setBusy(true);
-    setMessage("");
-    setIsError(false);
-    setWarning(null);
-    try {
-      const result = await send(context, force);
-      if (result.status === "sent") {
-        setMessage("Wysłano.");
-        setLastSentAt(new Date().toISOString());
-      } else setWarning(result);
-    } catch (error) {
-      setIsError(true);
-      setMessage(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (context === undefined) {
     return (
@@ -59,9 +29,9 @@ export function PopupApp() {
     return (
       <main class="popup">
         <h1>Browser Tabs Sync</h1>
-        {message && (
+        {error && (
           <p class="error" role="alert">
-            {message}
+            {error}
           </p>
         )}
         <p class="muted">Połącz rozszerzenie z repozytorium, aby wysyłać i pobierać karty.</p>
@@ -74,7 +44,7 @@ export function PopupApp() {
     );
   }
 
-  const { deviceName, profileName } = context.settings;
+  const { deviceName, profileName, lastSentAt } = context.settings;
 
   return (
     <main class="popup">
@@ -104,43 +74,14 @@ export function PopupApp() {
         </button>
       </header>
 
-      {warning ? (
-        <section class="notice">
-          {warning.status === "newer" ? (
-            <>
-              <p>
-                {warning.deviceName} wysłał zmiany {formatWhen(warning.sentAt)}, których tu nie
-                masz.
-              </p>
-              <button class="button primary" onClick={openPreview}>
-                Najpierw pobierz
-              </button>
-            </>
-          ) : (
-            <p>Dane w repozytorium są nieprawidłowe.</p>
-          )}
-          <button class="button danger" onClick={() => runSend(true)}>
-            Nadpisz mimo to
-          </button>
-          <button class="button quiet" onClick={() => setWarning(null)}>
-            Anuluj
-          </button>
-        </section>
-      ) : (
-        <div class="popup-actions">
-          <button class="button primary" disabled={busy} onClick={() => runSend(false)}>
-            {busy ? "Wysyłam…" : "Wyślij karty z tego komputera"}
-          </button>
-          <button class="button" disabled={busy} onClick={openPreview}>
-            Sprawdź i pobierz zmiany
-          </button>
-        </div>
-      )}
-      {message && (
-        <p class={isError ? "error" : "muted"} role={isError ? "alert" : "status"}>
-          {message}
-        </p>
-      )}
+      <div class="popup-actions">
+        <button class="button primary" onClick={() => openPage("send")}>
+          Wybierz i wyślij karty
+        </button>
+        <button class="button" onClick={() => openPage("preview")}>
+          Sprawdź i pobierz zmiany
+        </button>
+      </div>
     </main>
   );
 }

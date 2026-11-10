@@ -24,7 +24,7 @@ To update, replace the folder with the new version and choose Reload on `chrome:
 
 ## How it works
 
-`Send` encrypts the profile's state in the browser and commits it to your repository. `Pull` downloads it, shows every change with checkboxes, backs up the current state and applies what you selected. Sync profiles are independent of Chrome profile names.
+`Send` lists the current tabs and bookmarks with checkboxes, encrypts the selected ones in the browser and commits them to your repository. Unchecked items stay out of the profile, so a later `Pull` on the same computer proposes closing those tabs. `Pull` downloads it, shows every change with checkboxes, backs up the current state and applies what you selected. Sync profiles are independent of Chrome profile names.
 
 ## Privacy and security
 
@@ -51,5 +51,5 @@ Output lands in `dist/extension`. Releases are built by pushing a `v*` tag.
 
 - `src/shared`: sync logic, with no UI
 - `src/ui`: Preact screens
-- `src/popup`, `src/options`, `src/preview`: page entries
+- `src/popup`, `src/options`, `src/preview`, `src/send`: page entries
 - `tests`: unit tests, `e2e`: Playwright

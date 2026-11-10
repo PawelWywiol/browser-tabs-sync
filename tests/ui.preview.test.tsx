@@ -17,7 +17,8 @@ vi.mock("../src/shared/sync", () => ({
 }));
 vi.mock("../src/shared/idb", () => ({ listBackups: mocks.listBackups }));
 
-import { buildWindows, PreviewApp } from "../src/ui/preview/App";
+import { PreviewApp } from "../src/ui/preview/App";
+import { buildWindows } from "../src/ui/shared/review";
 
 const plan = {
   sha: "s",
@@ -76,6 +77,7 @@ beforeEach(() => {
   mocks.loadContext.mockResolvedValue(context);
   mocks.loadPull.mockResolvedValue(plan);
   mocks.runPull.mockResolvedValue([]);
+  vi.stubGlobal("chrome", { runtime: { getURL: (p: string) => p } });
 });
 afterEach(cleanup);
 

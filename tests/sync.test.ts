@@ -46,6 +46,7 @@ const remoteSnapshot: Snapshot = {
   windows: [],
   bookmarks: [],
 };
+const state = { windows: [], bookmarks: [] };
 const context = (lastSeenSha?: string) => {
   mocks.loadSettings.mockResolvedValue({ lastSeenSha });
   return { remote: {} as never, settings: { profileId: "p", deviceName: "Desktop" } as never };
@@ -60,7 +61,7 @@ beforeEach(() => {
 describe("send", () => {
   it("writes when the remote is empty", async () => {
     mocks.readSnapshot.mockResolvedValue(null);
-    expect(await send(context())).toEqual({ status: "sent" });
+    expect(await send(context(), state)).toEqual({ status: "sent" });
     expect(mocks.saveSettings).toHaveBeenCalledWith({
       lastSeenSha: "new-sha",
       lastSentAt: expect.any(String),
@@ -69,13 +70,13 @@ describe("send", () => {
 
   it("writes when the remote matches the last seen version", async () => {
     mocks.readSnapshot.mockResolvedValue({ snapshot: remoteSnapshot, sha: "s1" });
-    expect(await send(context("s1"))).toEqual({ status: "sent" });
+    expect(await send(context("s1"), state)).toEqual({ status: "sent" });
     expect(mocks.writeSnapshot.mock.calls[0]![3]).toBe("s1");
   });
 
   it("warns about a newer remote and writes nothing", async () => {
     mocks.readSnapshot.mockResolvedValue({ snapshot: remoteSnapshot, sha: "s2" });
-    expect(await send(context("s1"))).toEqual({
+    expect(await send(context("s1"), state)).toEqual({
       status: "newer",
       deviceName: "Laptop",
       sentAt: "t1",
@@ -85,21 +86,21 @@ describe("send", () => {
 
   it("overwrites using only the remote SHA when forced", async () => {
     mocks.readSnapshotSha.mockResolvedValue("s2");
-    expect(await send(context("s1"), true)).toEqual({ status: "sent" });
+    expect(await send(context("s1"), state, true)).toEqual({ status: "sent" });
     expect(mocks.readSnapshot).not.toHaveBeenCalled();
     expect(mocks.writeSnapshot.mock.calls[0]![3]).toBe("s2");
   });
 
   it("reports an invalid remote without writing", async () => {
     mocks.readSnapshot.mockRejectedValue(new InvalidSnapshotError());
-    expect(await send(context("s1"))).toEqual({ status: "invalid" });
+    expect(await send(context("s1"), state)).toEqual({ status: "invalid" });
     expect(mocks.writeSnapshot).not.toHaveBeenCalled();
   });
 
   it("keeps a decrypt failure as an error", async () => {
     const failure = new DecryptError();
     mocks.readSnapshot.mockRejectedValue(failure);
-    await expect(send(context("s1"))).rejects.toBe(failure);
+    await expect(send(context("s1"), state)).rejects.toBe(failure);
   });
 
   it("compares against the freshly stored last seen version", async () => {
@@ -109,7 +110,7 @@ describe("send", () => {
       settings: { profileId: "p", deviceName: "Desktop", lastSeenSha: "s1" } as never,
     };
     mocks.loadSettings.mockResolvedValue({ lastSeenSha: "s2" });
-    expect(await send(stale)).toEqual({ status: "sent" });
+    expect(await send(stale, state)).toEqual({ status: "sent" });
   });
 
   it("turns a concurrent write into a newer warning", async () => {
@@ -117,7 +118,7 @@ describe("send", () => {
       .mockResolvedValueOnce({ snapshot: remoteSnapshot, sha: "s1" })
       .mockResolvedValueOnce({ snapshot: { ...remoteSnapshot, deviceName: "Other" }, sha: "s3" });
     mocks.writeSnapshot.mockRejectedValue(new GitHubError("conflict"));
-    expect(await send(context("s1"))).toEqual({
+    expect(await send(context("s1"), state)).toEqual({
       status: "newer",
       deviceName: "Other",
       sentAt: "t1",

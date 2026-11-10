@@ -39,7 +39,11 @@ const newer = (snapshot: Snapshot): SendResult => ({
   sentAt: snapshot.sentAt,
 });
 
-async function sendChecked(context: SyncContext, force: boolean): Promise<SendResult> {
+async function sendChecked(
+  context: SyncContext,
+  state: BrowserState,
+  force: boolean,
+): Promise<SendResult> {
   const { remote, settings } = context;
   let remoteSha: string | undefined;
   if (force) {
@@ -50,7 +54,7 @@ async function sendChecked(context: SyncContext, force: boolean): Promise<SendRe
     if (existing && existing.sha !== lastSeenSha) return newer(existing.snapshot);
     remoteSha = existing?.sha;
   }
-  const snapshot = toSnapshot(await capture(), settings.deviceName, new Date().toISOString());
+  const snapshot = toSnapshot(state, settings.deviceName, new Date().toISOString());
   try {
     const sha = await writeSnapshot(remote, settings.profileId, snapshot, remoteSha);
     await saveSettings({ lastSeenSha: sha, lastSentAt: snapshot.sentAt });
@@ -63,9 +67,13 @@ async function sendChecked(context: SyncContext, force: boolean): Promise<SendRe
   }
 }
 
-export async function send(context: SyncContext, force = false): Promise<SendResult> {
+export async function send(
+  context: SyncContext,
+  state: BrowserState,
+  force = false,
+): Promise<SendResult> {
   try {
-    return await sendChecked(context, force);
+    return await sendChecked(context, state, force);
   } catch (error) {
     if (error instanceof InvalidSnapshotError) return { status: "invalid" };
     throw error;
