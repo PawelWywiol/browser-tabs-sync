@@ -254,7 +254,7 @@ input[type="radio"] {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 28px 24px;
+  padding: 20px 24px;
   background: var(--mist);
 }
 .bar-inner {
@@ -326,6 +326,25 @@ input[type="radio"] {
   gap: 16px;
   margin-top: 8px;
 }
+.folder {
+  margin-top: 12px;
+}
+.folder-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.folder-name svg {
+  flex: none;
+  color: var(--muted);
+}
+.folder-body {
+  margin: 4px 0 0 8px;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+}
 .rail {
   flex: none;
   width: 3px;
@@ -340,13 +359,40 @@ input[type="radio"] {
   flex: 1;
   min-width: 0;
 }
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 880px;
+  margin: 16px auto 0;
+}
+.page > .notice,
+.page > .error {
+  margin-bottom: 24px;
+}
 .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+}
+.row-main {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   column-gap: 12px;
-  min-height: 46px;
   cursor: pointer;
+}
+.row-actions {
+  flex: none;
+  display: flex;
+}
+.row-actions .icon-button {
+  width: 36px;
+  height: 36px;
+  margin: 0;
 }
 .sign {
   width: 12px;
@@ -357,18 +403,10 @@ input[type="radio"] {
 .sign.close {
   color: var(--close);
 }
-.letter {
+.favicon {
   flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--mist);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
+  width: 20px;
+  height: 20px;
 }
 .row-title {
   flex: 1 1 220px;
@@ -379,6 +417,15 @@ input[type="radio"] {
 .row.off .row-title {
   color: var(--muted);
   font-weight: 400;
+}
+.pin {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: var(--mist);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
 }
 .row-host {
   color: var(--muted);

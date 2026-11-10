@@ -19,8 +19,8 @@ async function pull(local: string[], target: string[], keep: string[]): Promise<
     await expect(options.getByText("Wybrano profil: Praca.")).toBeVisible();
 
     await arrangeTabs(options, target);
-    const popup = await openExtensionPage(context, "popup/index.html");
-    await popup.getByRole("button", { name: "Wyślij" }).click();
+    const popup = await openExtensionPage(context, "send/index.html");
+    await popup.getByRole("button", { name: "Wyślij zaznaczone" }).click();
     await expect(popup.getByText("Wysłano.")).toBeVisible();
 
     await arrangeTabs(options, local);

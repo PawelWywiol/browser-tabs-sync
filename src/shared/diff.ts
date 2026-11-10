@@ -6,6 +6,7 @@ export type TabChange = {
   url: string;
   title: string;
   windowIndex: number;
+  pinned?: boolean;
   groupTitle?: string;
   groupColor?: string;
   targetTab?: number;
@@ -101,6 +102,7 @@ function diffTabs(local: BrowserState, target: BrowserState, windowPairs: number
         title: tab.title,
         windowIndex: targetIndex,
         targetTab,
+        ...(tab.pinned ? { pinned: true } : {}),
         ...(group ? { groupTitle: group.title, groupColor: group.color } : {}),
       });
     });
@@ -117,6 +119,7 @@ function diffTabs(local: BrowserState, target: BrowserState, windowPairs: number
         title: tab.title,
         windowIndex,
         localId: tab.localId!,
+        ...(tab.pinned ? { pinned: true } : {}),
         ...(group ? { groupTitle: group.title, groupColor: group.color } : {}),
       });
     }

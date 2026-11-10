@@ -12,11 +12,18 @@ export class FakeGitHub {
     const request = route.request();
     const path = new URL(request.url()).pathname.replace("/repos/o/r/contents/", "");
     if (path === "/repos/o/r") return route.fulfill({ json: { full_name: "o/r" } });
+    const blobSha = path.match(/^\/repos\/o\/r\/git\/blobs\/(.+)$/)?.[1];
+    if (blobSha) {
+      const file = [...this.files.values()].find((f) => f.sha === blobSha);
+      return route.fulfill(
+        file ? { json: { encoding: "base64", content: file.content } } : { status: 404, json: {} },
+      );
+    }
     const existing = this.files.get(path);
     if (request.method() === "GET") {
       if (!existing) return route.fulfill({ status: 404, json: {} });
       return route.fulfill({
-        json: { sha: existing.sha, encoding: "base64", content: existing.content },
+        json: { sha: existing.sha, encoding: "base64", content: "bWFuZ2xlZA==" },
       });
     }
     const body = request.postDataJSON() as { content: string; sha?: string };

@@ -5,7 +5,7 @@ import { build } from "esbuild";
 const repoRoot = resolve(import.meta.dirname, "..");
 const srcDir = resolve(repoRoot, "src");
 const outdir = resolve(repoRoot, "dist/extension");
-const pages = ["popup", "options", "preview"];
+const pages = ["popup", "options", "preview", "send"];
 
 rmSync(outdir, { force: true, recursive: true });
 

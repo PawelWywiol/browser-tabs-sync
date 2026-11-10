@@ -8,7 +8,13 @@ const manifest = JSON.parse(
 
 describe("manifest", () => {
   it("grants only the required permissions", () => {
-    expect([...manifest.permissions].sort()).toEqual(["bookmarks", "storage", "tabGroups", "tabs"]);
+    expect([...manifest.permissions].sort()).toEqual([
+      "bookmarks",
+      "favicon",
+      "storage",
+      "tabGroups",
+      "tabs",
+    ]);
     expect(manifest.host_permissions).toEqual(["https://api.github.com/*"]);
   });
 

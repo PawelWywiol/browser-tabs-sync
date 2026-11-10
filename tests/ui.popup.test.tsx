@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
+import { cleanup, fireEvent, render, screen } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ loadContext: vi.fn(), send: vi.fn() }));
+const mocks = vi.hoisted(() => ({ loadContext: vi.fn() }));
 vi.mock("../src/shared/sync", () => mocks);
 
 import { PopupApp } from "../src/ui/popup/App";
@@ -28,41 +28,14 @@ describe("PopupApp", () => {
     expect(chrome.runtime.openOptionsPage).toHaveBeenCalled();
   });
 
-  it("shows the sync profile and reports a successful send", async () => {
-    mocks.send.mockResolvedValue({ status: "sent" });
+  it("shows the sync profile and opens the send review", async () => {
     render(<PopupApp />);
     expect(await screen.findByText(/Praca/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Wyślij karty/ }));
-    expect(await screen.findByText("Wysłano.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /wyślij karty/ }));
+    expect(chrome.tabs.create).toHaveBeenCalledWith({ url: "send/index.html" });
   });
 
-  it("warns about newer data and can overwrite", async () => {
-    mocks.send.mockResolvedValueOnce({
-      status: "newer",
-      deviceName: "Laptop",
-      sentAt: "2026-11-08T10:00:00Z",
-    });
-    mocks.send.mockResolvedValueOnce({ status: "sent" });
-    render(<PopupApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Wyślij karty/ }));
-    expect(await screen.findByText(/Laptop/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Nadpisz mimo to" }));
-    await waitFor(() => expect(mocks.send).toHaveBeenLastCalledWith(expect.anything(), true));
-  });
-
-  it("offers overwrite for invalid remote data but not pulling first", async () => {
-    mocks.send.mockResolvedValueOnce({ status: "invalid" });
-    mocks.send.mockResolvedValueOnce({ status: "sent" });
-    render(<PopupApp />);
-    fireEvent.click(await screen.findByRole("button", { name: /Wyślij karty/ }));
-    expect(await screen.findByText("Dane w repozytorium są nieprawidłowe.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Najpierw pobierz" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Anuluj" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Nadpisz mimo to" }));
-    await waitFor(() => expect(mocks.send).toHaveBeenLastCalledWith(expect.anything(), true));
-  });
-
-  it("opens the preview page from the warning and from Pull", async () => {
+  it("opens the pull preview", async () => {
     render(<PopupApp />);
     fireEvent.click(await screen.findByRole("button", { name: /pobierz zmiany/ }));
     expect(chrome.tabs.create).toHaveBeenCalledWith({ url: "preview/index.html" });

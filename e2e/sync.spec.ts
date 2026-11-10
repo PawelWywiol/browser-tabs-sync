@@ -31,8 +31,8 @@ test("sends from one profile, previews and pulls into another", async () => {
     });
   });
 
-  const senderPopup = await openExtensionPage(sender, "popup/index.html");
-  await senderPopup.getByRole("button", { name: "Wyślij" }).click();
+  const senderPopup = await openExtensionPage(sender, "send/index.html");
+  await senderPopup.getByRole("button", { name: "Wyślij zaznaczone" }).click();
   await expect(senderPopup.getByText("Wysłano.")).toBeVisible();
   await sender.close();
 
@@ -73,8 +73,8 @@ test("sends from one profile, previews and pulls into another", async () => {
   await receiver.close();
 
   const restarted = await launch(receiverDir, github);
-  const popup = await openExtensionPage(restarted, "popup/index.html");
-  await popup.getByRole("button", { name: "Wyślij" }).click();
+  const popup = await openExtensionPage(restarted, "send/index.html");
+  await popup.getByRole("button", { name: "Wyślij zaznaczone" }).click();
   await expect(popup.getByText("Wysłano.")).toBeVisible();
   await restarted.close();
 });
@@ -92,15 +92,96 @@ test("warns before overwriting newer data", async () => {
   await secondOptions.getByRole("button", { name: "Praca" }).click();
   await expect(secondOptions.getByText("Wybrano profil: Praca.")).toBeVisible();
 
-  const firstPopup = await openExtensionPage(first, "popup/index.html");
-  await firstPopup.getByRole("button", { name: "Wyślij" }).click();
+  await (await first.newPage()).goto("https://first.test/");
+  await (await second.newPage()).goto("https://second.test/");
+
+  const firstPopup = await openExtensionPage(first, "send/index.html");
+  await firstPopup.getByRole("button", { name: "Wyślij zaznaczone" }).click();
   await expect(firstPopup.getByText("Wysłano.")).toBeVisible();
 
-  const secondPopup = await openExtensionPage(second, "popup/index.html");
-  await secondPopup.getByRole("button", { name: "Wyślij" }).click();
+  const secondPopup = await openExtensionPage(second, "send/index.html");
+  await secondPopup.getByRole("button", { name: "Wyślij zaznaczone" }).click();
   await expect(secondPopup.getByText(/Laptop/)).toBeVisible();
   await expect(secondPopup.getByRole("button", { name: "Nadpisz mimo to" })).toBeVisible();
 
   await first.close();
   await second.close();
+});
+
+test("leaves unchecked tabs out of what is sent", async () => {
+  const github = new FakeGitHub();
+  const sender = await launch(newProfileDir(), github);
+  const { page: options, keyText } = await configure(sender, null, "Laptop");
+  await options.getByLabel("Nowy profil synchronizacji").fill("Praca");
+  await options.getByRole("button", { name: "Utwórz" }).click();
+  await expect(options.getByText("Wybrano profil: Praca.")).toBeVisible();
+  await (await sender.newPage()).goto("https://keep.test/");
+  await (await sender.newPage()).goto("https://secret.test/");
+
+  const send = await openExtensionPage(sender, "send/index.html");
+  await send.getByRole("checkbox", { name: /secret\.test/ }).uncheck();
+  await send.getByRole("button", { name: "Wyślij zaznaczone" }).click();
+  await expect(send.getByText("Wysłano.")).toBeVisible();
+  await sender.close();
+
+  const receiver = await launch(newProfileDir(), github);
+  const { page: receiverOptions } = await configure(receiver, keyText, "Desktop");
+  await receiverOptions.getByRole("button", { name: "Praca" }).click();
+  await expect(receiverOptions.getByText("Wybrano profil: Praca.")).toBeVisible();
+  const preview = await openExtensionPage(receiver, "preview/index.html");
+  await expect(preview.getByRole("checkbox", { name: /keep\.test/ })).toBeVisible();
+  await expect(preview.getByRole("checkbox", { name: /secret\.test/ })).toHaveCount(0);
+  await receiver.close();
+});
+
+test("searches, opens links and loads favicons on the send page", async () => {
+  const github = new FakeGitHub();
+  const context = await launch(newProfileDir(), github);
+  const { page: options } = await configure(context, null, "Laptop");
+  await options.getByLabel("Nowy profil synchronizacji").fill("Praca");
+  await options.getByRole("button", { name: "Utwórz" }).click();
+  await expect(options.getByText("Wybrano profil: Praca.")).toBeVisible();
+  await (await context.newPage()).goto("https://keep.test/");
+  await (await context.newPage()).goto("https://other.test/");
+
+  const send = await openExtensionPage(context, "send/index.html");
+  const other = send.getByRole("checkbox", { name: /other\.test/ });
+  await other.uncheck();
+  await send.getByRole("searchbox").fill("keep");
+  await expect(other).toHaveCount(0);
+  await send.getByRole("searchbox").fill("");
+  await expect(other).not.toBeChecked();
+
+  await send.setViewportSize({ width: 1000, height: 300 });
+  const searchTop = (await send.getByRole("searchbox").boundingBox())!.y;
+  await send.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  expect(await send.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect((await send.getByRole("searchbox").boundingBox())!.y).toBe(searchTop);
+  await send.setViewportSize({ width: 1280, height: 720 });
+
+  const icon = send.locator("img.favicon").first();
+  await icon.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() => icon.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+
+  await send.getByRole("button", { name: /nowej karcie: keep\.test/ }).click();
+  await expect
+    .poll(() =>
+      send.evaluate(async () => (await chrome.tabs.query({ url: "https://keep.test/*" })).length),
+    )
+    .toBe(2);
+  expect(await send.evaluate(() => document.visibilityState)).toBe("visible");
+
+  const cdp = await context.newCDPSession(send);
+  const browserContexts = async () => {
+    const { targetInfos } = await cdp.send("Target.getTargets");
+    return new Set(targetInfos.filter((t) => t.type === "page").map((t) => t.browserContextId))
+      .size;
+  };
+  expect(await browserContexts()).toBe(1);
+  await send.getByRole("button", { name: /incognito: keep\.test/ }).click();
+  await expect.poll(browserContexts).toBe(2);
+  await expect(send.getByRole("alert")).toHaveCount(0);
+  await context.close();
 });
