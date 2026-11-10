@@ -13,15 +13,18 @@ afterEach(() => {
 });
 
 describe("readFile", () => {
-  it("decodes base64 content containing newlines and bypasses the cache", async () => {
-    fetchMock.mockResolvedValue(json(200, { sha: "s1", encoding: "base64", content: "dHdv\n" }));
+  it("reads exact bytes from the blob, not the contents response GitHub may transcode", async () => {
+    fetchMock
+      .mockResolvedValueOnce(json(200, { sha: "s1", encoding: "base64", content: "bWFuZ2xlZA==" }))
+      .mockResolvedValueOnce(json(200, { encoding: "base64", content: "dHdv\n" }));
     const file = await readFile(config, "a.enc");
     expect(file?.sha).toBe("s1");
     expect(new TextDecoder().decode(file?.bytes)).toBe("two");
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("https://api.github.com/repos/o/r/contents/a.enc");
+    const [contentsUrl, init] = fetchMock.mock.calls[0]!;
+    expect(contentsUrl).toBe("https://api.github.com/repos/o/r/contents/a.enc");
     expect(init.cache).toBe("no-store");
     expect(init.headers.Authorization).toBe("Bearer t");
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.github.com/repos/o/r/git/blobs/s1");
   });
 
   it("returns null for a missing file", async () => {
@@ -29,13 +32,9 @@ describe("readFile", () => {
     expect(await readFile(config, "a.enc")).toBeNull();
   });
 
-  it("fetches raw bytes when the JSON has no inline content", async () => {
-    fetchMock
-      .mockResolvedValueOnce(json(200, { sha: "s1", encoding: "none", content: "" }))
-      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2]), { status: 200 }));
-    const file = await readFile(config, "a.enc");
-    expect([...file!.bytes]).toEqual([1, 2]);
-    expect(fetchMock.mock.calls[1]![1].headers.Accept).toBe("application/vnd.github.raw+json");
+  it("reports a failed blob read", async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { sha: "s1" })).mockResolvedValueOnce(json(401, {}));
+    await expect(readFile(config, "a.enc")).rejects.toMatchObject({ kind: "auth" });
   });
 });
 

@@ -18,8 +18,8 @@ export class GitHubError extends Error {
 const baseUrl = (config: RepoConfig) =>
   `https://api.github.com/repos/${config.owner}/${config.repo}`;
 
-const headers = (config: RepoConfig, accept = "application/vnd.github+json") => ({
-  Accept: accept,
+const headers = (config: RepoConfig) => ({
+  Accept: "application/vnd.github+json",
   Authorization: `Bearer ${config.token}`,
   "X-GitHub-Api-Version": "2026-03-10",
 });
@@ -51,16 +51,17 @@ export async function readFile(
   config: RepoConfig,
   path: string,
 ): Promise<{ sha: string; bytes: Uint8Array<ArrayBuffer> } | null> {
-  const url = `${baseUrl(config)}/contents/${path}`;
-  const response = await request(url, { headers: headers(config) });
+  const response = await request(`${baseUrl(config)}/contents/${path}`, {
+    headers: headers(config),
+  });
   if (response.status === 404) return null;
   if (!response.ok) throw errorFor(response);
-  const body = (await response.json()) as { sha: string; encoding: string; content: string };
-  if (body.encoding === "base64" && body.content)
-    return { sha: body.sha, bytes: fromBase64(body.content) };
-  const raw = await request(url, { headers: headers(config, "application/vnd.github.raw+json") });
-  if (!raw.ok) throw errorFor(raw);
-  return { sha: body.sha, bytes: new Uint8Array(await raw.arrayBuffer()) };
+  const { sha } = (await response.json()) as { sha: string };
+  // The contents API transcodes files it mistakes for text, which corrupts ciphertext.
+  const blob = await request(`${baseUrl(config)}/git/blobs/${sha}`, { headers: headers(config) });
+  if (!blob.ok) throw errorFor(blob);
+  const { content } = (await blob.json()) as { content: string };
+  return { sha, bytes: fromBase64(content) };
 }
 
 export async function writeFile(
