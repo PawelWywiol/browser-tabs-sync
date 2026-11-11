@@ -64,6 +64,11 @@ describe("errors", () => {
     await expect(checkRepo(config)).rejects.toMatchObject({ kind: "auth" });
   });
 
+  it("maps 403 without exhausted quota to forbidden", async () => {
+    fetchMock.mockResolvedValue(json(403, {}));
+    await expect(checkRepo(config)).rejects.toMatchObject({ kind: "forbidden" });
+  });
+
   it("maps a 404 repository to not-found", async () => {
     fetchMock.mockResolvedValue(json(404, {}));
     await expect(checkRepo(config)).rejects.toMatchObject({ kind: "not-found" });

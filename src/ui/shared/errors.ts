@@ -4,6 +4,7 @@ import { InvalidSnapshotError } from "../../shared/snapshot";
 
 const GITHUB_MESSAGES: Record<GitHubErrorKind, string> = {
   auth: "Token GitHub jest nieprawidłowy lub wygasł. Sprawdź konfigurację.",
+  forbidden: "Token nie ma uprawnień do repozytorium. Nadaj mu Contents: Read and write.",
   "not-found": "Nie znaleziono repozytorium. Sprawdź konfigurację i uprawnienia tokenu.",
   conflict: "Dane w repozytorium właśnie się zmieniły. Spróbuj ponownie.",
   "rate-limit": "Przekroczono limit GitHub. Spróbuj ponownie później.",
