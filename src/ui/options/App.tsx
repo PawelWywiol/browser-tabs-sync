@@ -398,6 +398,20 @@ export function OptionsApp() {
 
   const { owner, repo } = remote?.config ?? {};
 
+  const changeConnection = (
+    <div class="actions">
+      <button
+        class="button"
+        onClick={() => {
+          clearMessage();
+          setStage("repo");
+        }}
+      >
+        Zmień połączenie
+      </button>
+    </div>
+  );
+
   return (
     <Layout {...(currentProfile ? {} : { step: 2 })}>
       {currentProfile ? (
@@ -406,17 +420,7 @@ export function OptionsApp() {
           <p class="lead">
             Połączono z {owner}/{repo} jako {deviceName}.
           </p>
-          <div class="actions">
-            <button
-              class="button"
-              onClick={() => {
-                clearMessage();
-                setStage("repo");
-              }}
-            >
-              Zmień połączenie
-            </button>
-          </div>
+          {changeConnection}
           <section class="section">
             <h2>Profil synchronizacji</h2>
             {profilePicker}
@@ -430,6 +434,7 @@ export function OptionsApp() {
             do profilu w Chrome.
           </p>
           {profilePicker}
+          {changeConnection}
         </>
       )}
       {feedback}

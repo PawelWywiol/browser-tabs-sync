@@ -3,6 +3,7 @@ import { fromBase64, toBase64 } from "./base64";
 export type RepoConfig = { owner: string; repo: string; token: string };
 export type GitHubErrorKind =
   | "auth"
+  | "forbidden"
   | "not-found"
   | "conflict"
   | "rate-limit"
@@ -38,7 +39,7 @@ function errorFor(response: Response): GitHubError {
   if (response.status === 429 || response.headers.get("x-ratelimit-remaining") === "0") {
     return new GitHubError("rate-limit");
   }
-  if (response.status === 403) return new GitHubError("auth");
+  if (response.status === 403) return new GitHubError("forbidden");
   return new GitHubError("unknown");
 }
 

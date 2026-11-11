@@ -108,6 +108,14 @@ describe("OptionsApp", () => {
     );
   });
 
+  it("goes back to the repository step from profile selection", async () => {
+    mocks.loadSettings.mockResolvedValue({ ...connected, profileId: "", profileName: "" });
+    mocks.loadKey.mockResolvedValue({});
+    render(<OptionsApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zmień połączenie" }));
+    expect(await screen.findByLabelText("Repozytorium (owner/nazwa)")).toBeTruthy();
+  });
+
   it("shows a wrong key error and does not save the key", async () => {
     mocks.listProfiles.mockRejectedValue(new DecryptError("nope"));
     render(<OptionsApp />);
